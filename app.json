@@ -24,7 +24,7 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#0E7C7B"
       },
       "package": "com.medstock.app"
     },
