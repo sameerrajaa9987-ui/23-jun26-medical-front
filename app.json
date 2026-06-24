@@ -3,6 +3,9 @@
     "name": "MedStock",
     "slug": "inventory-saas",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,7 +19,9 @@
       "supportsTablet": true
     },
     "android": {
-      "permissions": ["android.permission.INTERNET"],
+      "permissions": [
+        "android.permission.INTERNET"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
@@ -27,6 +32,19 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "plugins": ["expo-secure-store", "expo-localization", "expo-font"]
+    "plugins": [
+      "expo-secure-store",
+      "expo-localization",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4320ec62-c3c0-46ba-b623-a873d5f59903"
+      }
+    },
+    "owner": "fdami2",
+    "updates": {
+      "url": "https://u.expo.dev/4320ec62-c3c0-46ba-b623-a873d5f59903"
+    }
   }
 }

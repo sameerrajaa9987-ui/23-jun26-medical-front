@@ -5,4 +5,17 @@ web-build/
 npm-debug.*
 *.orig.*
 .DS_Store
+
+# local env files
+.env
 .env.local
+.env*.local
+.env.*.local
+
+# generated native folders (recreated by `expo prebuild` / `eas build --local`)
+/ios
+/android
+
+# Build artifacts
+*.aab
+*.apk
