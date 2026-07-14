@@ -123,6 +123,18 @@ export const useAuthStore = create<AuthState>()(
         set({ token, refreshToken, isAuthenticated: true }),
 
       logout: async () => {
+        // Tell the server to drop this device's session so its slot frees up
+        // immediately (best-effort — local sign-out proceeds regardless).
+        const { refreshToken } = get();
+        if (refreshToken) {
+          try {
+            await axios.post(`${environment.apiUrl}/auth/logout`, {
+              refreshToken,
+            });
+          } catch {
+            // ignore network/expiry errors — the TTL will reclaim the slot
+          }
+        }
         await secureStorage.removeItem(STORAGE_KEY);
         set({
           user: null,

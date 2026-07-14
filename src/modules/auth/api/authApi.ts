@@ -1,4 +1,5 @@
 import { apiClient } from "@api/apiClient";
+import { getDeviceId, getDeviceName } from "@api/deviceId";
 import {
   AuthResponse,
   MessageResponse,
@@ -10,11 +11,21 @@ import {
 
 export const authApi = {
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
-    const res = await apiClient.post<AuthResponse>("/auth/login", payload);
+    const deviceId = await getDeviceId();
+    const res = await apiClient.post<AuthResponse>("/auth/login", {
+      ...payload,
+      deviceId,
+      deviceName: getDeviceName(),
+    });
     return res.data;
   },
   signup: async (payload: SignupPayload): Promise<AuthResponse> => {
-    const res = await apiClient.post<AuthResponse>("/auth/signup", payload);
+    const deviceId = await getDeviceId();
+    const res = await apiClient.post<AuthResponse>("/auth/signup", {
+      ...payload,
+      deviceId,
+      deviceName: getDeviceName(),
+    });
     return res.data;
   },
   forgotPassword: async (
