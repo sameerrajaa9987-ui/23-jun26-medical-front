@@ -41,6 +41,7 @@ import TeamNavigator from "@modules/team/TeamNavigator";
 import AuditLogScreen from "@modules/team/screens/AuditLogScreen";
 import SettingsScreen from "@modules/settings/screens/SettingsScreen";
 import ProfileScreen from "@modules/profile/screens/ProfileScreen";
+import RemindersScreen from "@modules/reminder/screens/RemindersScreen";
 
 /** Lets any screen jump to another top-level section by name. */
 export const SectionNav = createContext<(name: string) => void>(() => {});
@@ -63,6 +64,7 @@ const SCREENS: Record<string, React.ComponentType> = {
   Team: TeamNavigator,
   AuditLog: AuditLogScreen,
   Settings: SettingsScreen,
+  Reminders: RemindersScreen,
   Profile: ProfileScreen,
 };
 

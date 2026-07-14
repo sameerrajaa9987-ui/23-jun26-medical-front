@@ -16,6 +16,7 @@ import {
   ScrollText,
   Settings,
   UserRound,
+  BellRing,
   type LucideIcon,
 } from "lucide-react-native";
 import { PERMISSIONS } from "@shared/permissions";
@@ -122,5 +123,7 @@ export const NAV_ITEMS: NavItem[] = [
     permission: PERMISSIONS.AUDIT_VIEW,
   },
   { name: "Settings", label: "Settings", icon: Settings, adminOnly: true },
+  // Personal productivity — available to every signed-in user (no permission).
+  { name: "Reminders", label: "Reminders", icon: BellRing },
   { name: "Profile", label: "Profile", icon: UserRound },
 ];
