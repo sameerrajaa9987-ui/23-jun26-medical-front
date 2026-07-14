@@ -222,7 +222,9 @@ function NavRow({
 
 const styles = StyleSheet.create({
   wrap: {
-    flex: 1,
+    // Fixed-width column (width set inline per collapsed state); must NOT flex-grow
+    // or it fights the explicit width and fills half the screen when collapsed.
+    flexShrink: 0,
     backgroundColor: palette.surface.primary,
     borderRightWidth: 1,
     borderRightColor: palette.border.default,
