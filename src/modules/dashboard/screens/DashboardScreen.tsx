@@ -17,7 +17,7 @@ import {
 import { useAuthStore } from "@shared/store/useAuthStore";
 import { useDashboardSummary } from "@modules/dashboard/hooks/useDashboard";
 import { useSectionNav } from "@navigation/AppNavigator";
-import { palette } from "@shared/designSystem";
+import { palette, accents } from "@shared/designSystem";
 import {
   Screen,
   Text,
@@ -77,25 +77,25 @@ export default function DashboardScreen() {
       label: "Products",
       value: String(data?.products.total ?? 0),
       icon: Package,
-      tone: "light" as const,
+      accent: accents.teal,
     },
     {
       label: "Low stock",
       value: String(data?.inventory.lowStock ?? 0),
       icon: Boxes,
-      tone: "light" as const,
+      accent: accents.amber,
     },
     {
       label: "Expiring soon",
       value: String(data?.expiry.expiringSoon ?? 0),
       icon: AlarmClock,
-      tone: "light" as const,
+      accent: accents.red,
     },
     {
       label: "Today's sales",
       value: `₹${data?.sales.todayAmount ?? 0}`,
       icon: ReceiptIndianRupee,
-      tone: "light" as const,
+      accent: accents.blue,
     },
   ];
   const tileWidth = `${100 / cols}%` as const;
@@ -156,7 +156,7 @@ export default function DashboardScreen() {
               label={t.label}
               value={t.value}
               icon={t.icon}
-              tone={t.tone}
+              accent={t.accent}
             />
           </View>
         ))}

@@ -23,6 +23,8 @@ interface Props {
   icon?: LucideIcon;
   hint?: string;
   tone?: Tone;
+  /** ServRx colour-coded card: adds a top border + tinted icon in this accent. */
+  accent?: { color: string; tint: string };
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -37,6 +39,7 @@ export function StatTile({
   icon: Icon,
   hint,
   tone = "light",
+  accent,
   onPress,
   style,
 }: Props) {
@@ -48,8 +51,16 @@ export function StatTile({
   const dark = tone !== "light";
   const valueColor = dark ? "#FFFFFF" : palette.text.primary;
   const labelColor = dark ? "rgba(255,255,255,0.82)" : palette.text.tertiary;
-  const iconColor = dark ? "#FFFFFF" : palette.teal[600];
-  const iconBg = dark ? "rgba(255,255,255,0.18)" : palette.teal[50];
+  const iconColor = dark
+    ? "#FFFFFF"
+    : accent
+      ? accent.color
+      : palette.teal[600];
+  const iconBg = dark
+    ? "rgba(255,255,255,0.18)"
+    : accent
+      ? accent.tint
+      : palette.teal[50];
 
   const fill =
     tone === "teal"
@@ -102,6 +113,9 @@ export function StatTile({
           backgroundColor: fill,
           borderColor: dark ? "transparent" : outline.color,
         },
+        accent && !dark
+          ? { borderTopColor: accent.color, borderTopWidth: 3 }
+          : null,
         shadows.sm,
         style,
       ]}

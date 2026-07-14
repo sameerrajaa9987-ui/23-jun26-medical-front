@@ -28,7 +28,11 @@ const SIZE = 1024;
 
 // The mark, centered on (0,0). Caller translates + scales it.
 //   `box` = carton fill, `cross` = cross fill, `stack` = the carton behind.
-function mark({ box = WHITE, cross = CROSS, stack = "rgba(255,255,255,0.34)" } = {}) {
+function mark({
+  box = WHITE,
+  cross = CROSS,
+  stack = "rgba(255,255,255,0.34)",
+} = {}) {
   return `
     <!-- carton stacked behind (depth = "stock") -->
     <rect x="-216" y="-186" width="372" height="312" rx="40" fill="${stack}"/>
@@ -92,7 +96,10 @@ async function main() {
   await png(adaptiveSvg, "assets/adaptive-icon.png");
   await png(badgeSvg, "assets/splash-icon.png");
   await png(badgeSvg, "assets/brand/logo.png");
-  await sharp("assets/icon.png").resize(48, 48).png().toFile("assets/favicon.png");
+  await sharp("assets/icon.png")
+    .resize(48, 48)
+    .png()
+    .toFile("assets/favicon.png");
   console.log("  ✓ assets/favicon.png");
   console.log("Done.");
 }

@@ -1,104 +1,119 @@
 /**
- * MedStock Design System — Clean Clinical (2026 edition).
+ * MedStock Design System — ServRx-aligned (2026).
  *
- * Calm clinical teal + cobalt accent on near-white surfaces. Tuned for a
- * medical inventory SaaS used all day at a desk and on the go: strategic
- * minimalism, generous whitespace, soft (blurred) elevation, large rounded
- * corners, and glass accents. Same token *structure* as the goat-farm system
- * so the shared/ui kit ports cleanly — only the values change.
+ * Bright clinical teal as the single confident brand colour, cobalt blue as the
+ * secondary accent, on clean cool-white surfaces (never warm/greige). Friendly
+ * rounded headings (Poppins) + highly legible data type (Inter). Modelled on the
+ * ServRx pharmacy portal: colour-coded KPI cards, tinted summary bars, teal tab
+ * underlines and active states, soft shadows over hairline borders.
+ *
+ * Token *structure* is unchanged from the previous system, so every screen and
+ * the shared/ui kit re-skin from these values alone.
  */
 
 export const palette = {
-  // Primary ink — slate (cool, calm, high-legibility text)
+  // Ink — cool slate for calm, high-legibility text
   ink: {
-    900: "#0F172A",
-    800: "#1E293B",
-    700: "#334155",
-    600: "#475569",
-    500: "#64748B",
-    400: "#94A3B8",
-    300: "#CBD5E1",
-    200: "#E2E8F0",
-    100: "#F1F5F9",
-    50: "#F8FAFC",
+    900: "#17242D",
+    800: "#1E2C36",
+    700: "#334049",
+    600: "#4A5760",
+    500: "#697680",
+    400: "#94A2AB",
+    300: "#C6CFD5",
+    200: "#E1E7EB",
+    100: "#EFF3F5",
+    50: "#F6F9FB",
   },
 
-  // Primary brand — clinical teal
+  // Primary brand — bright clinical teal (ServRx)
   teal: {
-    900: "#0A3B3A",
-    800: "#0E4F4D",
-    700: "#0F6562",
-    600: "#0E7C7B",
-    500: "#14958F",
-    400: "#2FB3AC",
-    300: "#5FCFC8",
-    200: "#A7E6E1",
-    100: "#D6F5F2",
-    50: "#ECFBF9",
+    900: "#0A4F49",
+    800: "#0C6E64",
+    700: "#0E8C7F",
+    600: "#16B2A2",
+    500: "#22C3B2",
+    400: "#43D0C1",
+    300: "#7CE0D4",
+    200: "#AEEBE3",
+    100: "#D7F5F0",
+    50: "#EDFBF9",
   },
 
-  // Accent — cobalt blue (links, secondary CTAs, info)
+  // Accent — cobalt blue (links, secondary CTAs, info, "sales")
   cobalt: {
-    900: "#0B254E",
-    800: "#103572",
-    700: "#1A4D9E",
-    600: "#2563EB",
-    500: "#3B82F6",
-    400: "#60A5FA",
-    300: "#93C5FD",
-    200: "#BFDBFE",
-    100: "#DBEAFE",
-    50: "#EFF6FF",
+    900: "#0E3F6E",
+    800: "#125C9C",
+    700: "#1673C0",
+    600: "#1E8FE6",
+    500: "#3B9AEA",
+    400: "#5FAAEF",
+    300: "#93C6F4",
+    200: "#BFDDF8",
+    100: "#DCEBFC",
+    50: "#EFF6FE",
   },
 
   // Cool neutral surfaces
   neutral: {
     0: "#FFFFFF",
-    50: "#F8FAFC",
-    100: "#F1F5F9",
-    200: "#E2E8F0",
-    300: "#CBD5E1",
-    400: "#94A3B8",
-    500: "#64748B",
-    600: "#475569",
-    700: "#334155",
-    800: "#1E293B",
-    900: "#0F172A",
+    50: "#F6F9FB",
+    100: "#EFF3F5",
+    200: "#E1E7EB",
+    300: "#C6CFD5",
+    400: "#94A2AB",
+    500: "#697680",
+    600: "#4A5760",
+    700: "#334049",
+    800: "#1E2C36",
+    900: "#17242D",
   },
 
   surface: {
     primary: "#FFFFFF",
-    secondary: "#F6F8FB",
-    tertiary: "#F1F5F9",
+    secondary: "#F3F6F8",
+    tertiary: "#EDF2F4",
     raised: "#FFFFFF",
-    sunken: "#EEF2F7",
-    dark: "#0F172A",
-    darkRaised: "#1E293B",
+    sunken: "#E9EFF2",
+    dark: "#122029",
+    darkRaised: "#1B2C36",
   },
 
   text: {
-    primary: "#0F172A",
-    secondary: "#334155",
-    tertiary: "#64748B",
-    disabled: "#A0AEC0",
+    primary: "#17242D",
+    secondary: "#425059",
+    tertiary: "#788690",
+    disabled: "#A9B4BC",
     inverse: "#FFFFFF",
-    accent: "#0E7C7B",
-    link: "#2563EB",
+    accent: "#0E8C7F",
+    link: "#1E8FE6",
   },
 
   border: {
-    subtle: "#EEF2F7",
-    default: "#E2E8F0",
-    strong: "#CBD5E1",
-    focus: "#14958F",
-    dark: "#334155",
+    subtle: "#EFF3F5",
+    default: "#E4EAEE",
+    strong: "#D5DDE2",
+    focus: "#16B2A2",
+    dark: "#2A3A44",
   },
 
   // Semantic — stock / expiry / billing states
-  success: { bg: "#ECFDF5", text: "#047857", border: "#A7F3D0" },
-  warning: { bg: "#FFFBEB", text: "#B45309", border: "#FDE68A" },
-  danger: { bg: "#FEF2F2", text: "#B91C1C", border: "#FECACA" },
-  info: { bg: "#EFF6FF", text: "#1D4ED8", border: "#BFDBFE" },
+  success: { bg: "#E4F5EE", text: "#17976A", border: "#B7E6D3" },
+  warning: { bg: "#FBF1DC", text: "#B6791A", border: "#F3DCA6" },
+  danger: { bg: "#FCEAE7", text: "#D6412F", border: "#F6C9C1" },
+  info: { bg: "#E7F1FC", text: "#1E7FD6", border: "#BFDDF8" },
+} as const;
+
+/**
+ * KPI accent set — the ServRx colour-coded metric cards. Each entry is a
+ * { color, tint } pair for a card's top border + soft icon background.
+ */
+export const accents = {
+  teal: { color: "#16B2A2", tint: "#E4F6F3" },
+  blue: { color: "#1E8FE6", tint: "#E7F1FC" },
+  amber: { color: "#C1801C", tint: "#FBF1DC" },
+  red: { color: "#DB4B3D", tint: "#FCEAE7" },
+  purple: { color: "#7C6FE0", tint: "#EEECFB" },
 } as const;
 
 export const spacing = {
@@ -124,87 +139,126 @@ export const spacing = {
   "20": 80,
 } as const;
 
-// Soft, rounded corners for the clinical / minimal language.
+// Soft, rounded corners for the clean clinical language.
 export const radius = {
   xs: 6,
   sm: 8,
   md: 12,
-  lg: 16,
-  xl: 20,
-  "2xl": 24,
+  lg: 14,
+  xl: 18,
+  "2xl": 22,
   "3xl": 28,
   full: 9999,
 } as const;
 
-// Thin, light hairline outline (replaces the farm's heavy 2px black outline).
-export const outline = { width: 1, color: "#E2E8F0" } as const;
+// Thin hairline outline.
+export const outline = { width: 1, color: "#E4EAEE" } as const;
+
+/**
+ * Bundled font families (loaded via expo-font in App.tsx). Poppins carries the
+ * friendly rounded headings; Inter carries body copy and all tabular data.
+ * If a family fails to load the platform falls back to the system sans — no crash.
+ */
+export const fonts = {
+  display: "Poppins_700Bold",
+  heading: "Poppins_600SemiBold",
+  bodyRegular: "Inter_400Regular",
+  bodyMedium: "Inter_500Medium",
+  semibold: "Inter_600SemiBold",
+  bold: "Inter_700Bold",
+} as const;
 
 export const typography = {
   display: {
     large: {
-      fontSize: 40,
-      lineHeight: 48,
+      fontFamily: fonts.display,
+      fontSize: 38,
+      lineHeight: 46,
       fontWeight: "700" as const,
       letterSpacing: -0.5,
     },
     medium: {
-      fontSize: 32,
-      lineHeight: 40,
+      fontFamily: fonts.display,
+      fontSize: 30,
+      lineHeight: 38,
       fontWeight: "700" as const,
       letterSpacing: -0.4,
     },
     small: {
-      fontSize: 28,
-      lineHeight: 36,
+      fontFamily: fonts.display,
+      fontSize: 26,
+      lineHeight: 34,
       fontWeight: "700" as const,
       letterSpacing: -0.3,
     },
   },
   heading: {
     h1: {
-      fontSize: 24,
+      fontFamily: fonts.display,
+      fontSize: 23,
       lineHeight: 30,
       fontWeight: "700" as const,
       letterSpacing: -0.4,
     },
     h2: {
-      fontSize: 20,
+      fontFamily: fonts.heading,
+      fontSize: 19,
       lineHeight: 26,
       fontWeight: "600" as const,
       letterSpacing: -0.3,
     },
     h3: {
-      fontSize: 17,
+      fontFamily: fonts.heading,
+      fontSize: 16,
       lineHeight: 22,
       fontWeight: "600" as const,
       letterSpacing: -0.2,
     },
     h4: {
-      fontSize: 15,
+      fontFamily: fonts.heading,
+      fontSize: 14,
       lineHeight: 20,
       fontWeight: "600" as const,
       letterSpacing: -0.1,
     },
   },
   body: {
-    large: { fontSize: 17, lineHeight: 26, fontWeight: "400" as const },
-    default: { fontSize: 15, lineHeight: 22, fontWeight: "400" as const },
-    small: { fontSize: 13, lineHeight: 18, fontWeight: "400" as const },
+    large: {
+      fontFamily: fonts.bodyRegular,
+      fontSize: 16,
+      lineHeight: 25,
+      fontWeight: "400" as const,
+    },
+    default: {
+      fontFamily: fonts.bodyRegular,
+      fontSize: 14.5,
+      lineHeight: 22,
+      fontWeight: "400" as const,
+    },
+    small: {
+      fontFamily: fonts.bodyRegular,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "400" as const,
+    },
   },
   label: {
     large: {
-      fontSize: 15,
+      fontFamily: fonts.semibold,
+      fontSize: 14.5,
       lineHeight: 20,
       fontWeight: "600" as const,
       letterSpacing: -0.1,
     },
     medium: {
+      fontFamily: fonts.semibold,
       fontSize: 13,
       lineHeight: 18,
       fontWeight: "600" as const,
       letterSpacing: 0,
     },
     small: {
+      fontFamily: fonts.semibold,
       fontSize: 11,
       lineHeight: 16,
       fontWeight: "600" as const,
@@ -212,23 +266,25 @@ export const typography = {
     },
   },
   caption: {
+    fontFamily: fonts.bodyMedium,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "500" as const,
     letterSpacing: 0.1,
   },
   overline: {
+    fontFamily: fonts.semibold,
     fontSize: 11,
     lineHeight: 16,
     fontWeight: "700" as const,
-    letterSpacing: 1.2,
+    letterSpacing: 1,
     textTransform: "uppercase" as const,
   },
 } as const;
 
-// Soft, blurred elevation (clinical depth) — replaces the farm's hard offsets.
+// Soft, blurred elevation (clean clinical depth).
 const soft = (y: number, radius: number, opacity: number, elev: number) => ({
-  shadowColor: "#0F172A",
+  shadowColor: "#17242D",
   shadowOffset: { width: 0, height: y },
   shadowOpacity: opacity,
   shadowRadius: radius,
@@ -237,11 +293,11 @@ const soft = (y: number, radius: number, opacity: number, elev: number) => ({
 
 export const shadows = {
   none: {},
-  xs: soft(1, 2, 0.05, 1),
-  sm: soft(2, 6, 0.07, 2),
-  md: soft(4, 12, 0.09, 4),
-  lg: soft(8, 22, 0.11, 8),
-  xl: soft(14, 34, 0.14, 14),
+  xs: soft(1, 2, 0.04, 1),
+  sm: soft(2, 8, 0.06, 2),
+  md: soft(4, 14, 0.08, 4),
+  lg: soft(10, 26, 0.1, 8),
+  xl: soft(16, 38, 0.13, 14),
 } as const;
 
 export const elevation = {
@@ -261,13 +317,13 @@ export const motion = {
   },
 } as const;
 
-/** Gradients — soft clinical sweeps consumed by expo-linear-gradient. */
+/** Gradients — the ServRx cyan→blue brand sweep, consumed by expo-linear-gradient. */
 export const gradients = {
-  hero: ["#0E7C7B", "#0F6562", "#0A3B3A"] as const, // teal hero
-  teal: ["#14958F", "#0E7C7B"] as const,
-  cobalt: ["#3B82F6", "#2563EB", "#1A4D9E"] as const,
-  light: ["#FFFFFF", "#F6F8FB"] as const,
-  mist: ["#ECFBF9", "#EFF6FF"] as const,
+  hero: ["#16B2A2", "#12A6AE", "#1E8FE6"] as const, // teal → cyan → blue
+  teal: ["#22C3B2", "#12A096"] as const,
+  cobalt: ["#3B9AEA", "#1673C0"] as const,
+  light: ["#FFFFFF", "#F3F6F8"] as const,
+  mist: ["#EDFBF9", "#EFF6FE"] as const,
 } as const;
 
 /** Glass — translucent frosted panels for overlays over gradients/imagery. */
@@ -294,7 +350,7 @@ export const layout = {
   cardPadding: 20,
   sectionGap: 28,
   itemGap: 12,
-  sidebarWidth: 264,
+  sidebarWidth: 248,
   sidebarCollapsedWidth: 76,
   tabBarHeight: 72,
   tabBarClearance: 96,
