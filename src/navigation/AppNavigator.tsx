@@ -71,6 +71,7 @@ export default function AppNavigator() {
   const isWide = width >= layout.wideBreakpoint;
   const [active, setActive] = useState("Dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const navigate = (name: string) => {
     setActive(name);
@@ -84,7 +85,14 @@ export default function AppNavigator() {
   return (
     <SectionNav.Provider value={navigate}>
       <View style={styles.root}>
-        {isWide && <Sidebar activeRoute={active} onNavigate={navigate} />}
+        {isWide && (
+          <Sidebar
+            activeRoute={active}
+            onNavigate={navigate}
+            collapsed={collapsed}
+            onToggleCollapse={() => setCollapsed((c) => !c)}
+          />
+        )}
 
         <View style={{ flex: 1 }}>
           {!isWide && (
