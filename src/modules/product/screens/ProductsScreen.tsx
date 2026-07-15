@@ -2,10 +2,7 @@ import React, { useState, useEffect } from "react";
 import { View, TextInput, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Search, Plus, Package, ChevronRight, Pill } from "lucide-react-native";
-import {
-  useProductsInfinite,
-  useCategories,
-} from "@modules/product/hooks/useProducts";
+import { useProducts, useCategories } from "@modules/product/hooks/useProducts";
 import { ProductListItem } from "@modules/product/types";
 import { useAuthStore } from "@shared/store/useAuthStore";
 import { PERMISSIONS } from "@shared/permissions";
@@ -20,6 +17,7 @@ import {
   StatusChip,
   ChipsRow,
   EmptyState,
+  Pagination,
 } from "@shared/ui";
 
 export default function ProductsScreen() {
@@ -29,6 +27,8 @@ export default function ProductsScreen() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [categoryId, setCategoryId] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
 
   // Debounce: the catalogue can hold tens of thousands of rows, so don't fire a
   // server search on every keystroke.
@@ -37,23 +37,34 @@ export default function ProductsScreen() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Any change to the filters puts you back on page 1. Adjusted during render
+  // (React's documented pattern) rather than in an effect, which would cost an
+  // extra render pass and fetch the wrong page first.
+  const filterKey = `${debouncedSearch}|${categoryId}|${limit}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
+
   const { data: categories } = useCategories();
-  const params: { search?: string; categoryId?: string } = {};
+  const params: {
+    search?: string;
+    categoryId?: string;
+    page: number;
+    limit: number;
+  } = { page, limit };
   if (debouncedSearch) params.search = debouncedSearch;
   if (categoryId !== "all") params.categoryId = categoryId;
 
-  const {
-    data,
-    isLoading,
-    refetch,
-    isRefetching,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useProductsInfinite(params);
+  const { data, isLoading, refetch, isRefetching } = useProducts(params);
 
-  const products = data?.pages.flatMap((p) => p.data) ?? [];
-  const total = data?.pages[0]?.meta?.total ?? 0;
+  const products = data?.data ?? [];
+  const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.pages ?? 1;
+
+  // Snap back if the result set shrank below the current page.
+  if (!isLoading && totalPages > 0 && page > totalPages) setPage(totalPages);
 
   const categoryChips = [
     { key: "all", label: "All" },
@@ -125,28 +136,15 @@ export default function ProductsScreen() {
             />
           ))}
 
-          {/* Paging — the catalogue is far too large to render in one go. */}
-          <VStack gap={10} align="center" style={{ paddingVertical: 16 }}>
-            <Text variant="body-sm" tone="tertiary">
-              Showing {products.length.toLocaleString("en-IN")} of{" "}
-              {total.toLocaleString("en-IN")}
-            </Text>
-            {hasNextPage ? (
-              <Button
-                label={isFetchingNextPage ? "Loading…" : "Load more"}
-                variant="secondary"
-                fullWidth={false}
-                loading={isFetchingNextPage}
-                onPress={() => fetchNextPage()}
-              />
-            ) : (
-              products.length > 0 && (
-                <Text variant="caption" tone="tertiary">
-                  End of list — use search to find a product faster
-                </Text>
-              )
-            )}
-          </VStack>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+            label="products"
+          />
         </VStack>
       )}
     </Screen>

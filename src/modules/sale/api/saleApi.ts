@@ -14,6 +14,8 @@ export const saleApi = {
     search?: string;
     customerId?: string;
     status?: string;
+    page?: number;
+    limit?: number;
   }) => {
     const res = await apiClient.get<Paginated<SaleListItem>>("/sales", {
       params,

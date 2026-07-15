@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Pressable } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import {
@@ -18,20 +18,31 @@ import {
   Card,
   StatusChip,
   EmptyState,
+  Pagination,
 } from "@shared/ui";
 
 const money = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
 export default function ReceiptsScreen() {
   const navigation = useNavigation<any>();
-  const { data, isLoading, refetch, isRefetching } = useReceipts();
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const { data, isLoading, refetch, isRefetching } = useReceipts({
+    page,
+    limit,
+  });
   const receipts = data?.data ?? [];
+  const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.pages ?? 1;
+
+  // Snap back if the result set shrank below the current page.
+  if (!isLoading && totalPages > 0 && page > totalPages) setPage(totalPages);
 
   return (
     <Screen
       overline="Stock Inward"
       title="Receipt history"
-      subtitle={`${data?.meta?.total ?? 0} goods-received notes`}
+      subtitle={`${total.toLocaleString("en-IN")} goods-received notes`}
       refreshing={isRefetching || isLoading}
       onRefresh={refetch}
     >
@@ -63,6 +74,15 @@ export default function ReceiptsScreen() {
               onPress={() => navigation.navigate("ReceiptDetail", { id: r.id })}
             />
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+            label="receipts"
+          />
         </VStack>
       )}
     </Screen>

@@ -12,6 +12,7 @@ import {
   Card,
   StatusChip,
   EmptyState,
+  Pagination,
 } from "@shared/ui";
 
 const ACTION_TONE = (
@@ -31,16 +32,33 @@ const ACTION_TONE = (
 
 export default function AuditLogScreen() {
   const [search, setSearch] = useState("");
-  const { data, isLoading, refetch, isRefetching } = useAuditLogs(
-    search.trim() ? { search: search.trim() } : undefined,
-  );
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+
+  // Filter change → back to page 1 (adjusted during render, not in an effect).
+  const filterKey = `${search}|${limit}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const { data, isLoading, refetch, isRefetching } = useAuditLogs({
+    ...(search.trim() ? { search: search.trim() } : {}),
+    page,
+    limit,
+  });
   const logs = data?.data ?? [];
+  const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.pages ?? 1;
+
+  if (!isLoading && totalPages > 0 && page > totalPages) setPage(totalPages);
 
   return (
     <Screen
       overline="Compliance"
       title="Audit Logs"
-      subtitle={`${data?.meta?.total ?? 0} entries · append-only, tamper-proof`}
+      subtitle={`${total.toLocaleString("en-IN")} entries · append-only, tamper-proof`}
       refreshing={isRefetching || isLoading}
       onRefresh={refetch}
     >
@@ -67,6 +85,15 @@ export default function AuditLogScreen() {
           {logs.map((log) => (
             <LogRow key={log.id} log={log} />
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+            label="entries"
+          />
         </VStack>
       )}
     </Screen>

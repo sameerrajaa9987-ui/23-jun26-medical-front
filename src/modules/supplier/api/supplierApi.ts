@@ -7,7 +7,7 @@ import {
 } from "@modules/supplier/types";
 
 export const supplierApi = {
-  list: async (params?: { search?: string }) => {
+  list: async (params?: { search?: string; page?: number; limit?: number }) => {
     const res = await apiClient.get<Paginated<Supplier>>("/suppliers", {
       params,
     });

@@ -1,15 +1,24 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  keepPreviousData,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { saleApi } from "@modules/sale/api/saleApi";
 import { CreateSalePayload, CreateReturnPayload } from "@modules/sale/types";
 
+/** Paged invoice history — grows without bound, so load a page at a time. */
 export const useSales = (params?: {
   search?: string;
   customerId?: string;
   status?: string;
+  page?: number;
+  limit?: number;
 }) =>
   useQuery({
     queryKey: ["sales", params],
     queryFn: () => saleApi.list(params),
+    placeholderData: keepPreviousData,
   });
 
 export const useSale = (id: string) =>

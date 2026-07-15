@@ -2,7 +2,7 @@ import { apiClient } from "@api/apiClient";
 import { Customer, CustomerPayload, Paginated } from "@modules/customer/types";
 
 export const customerApi = {
-  list: async (params?: { search?: string }) => {
+  list: async (params?: { search?: string; page?: number; limit?: number }) => {
     const res = await apiClient.get<Paginated<Customer>>("/customers", {
       params,
     });

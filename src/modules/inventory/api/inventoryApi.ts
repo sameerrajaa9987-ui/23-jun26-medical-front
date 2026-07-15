@@ -11,12 +11,17 @@ import {
 } from "@modules/inventory/types";
 
 export const inventoryApi = {
-  stock: async (params?: { search?: string; lowStockOnly?: boolean }) => {
-    const res = await apiClient.get<{
-      success: boolean;
-      data: StockSummaryItem[];
-    }>("/inventory/stock", { params });
-    return res.data.data;
+  stock: async (params?: {
+    search?: string;
+    lowStockOnly?: boolean;
+    page?: number;
+    limit?: number;
+  }) => {
+    const res = await apiClient.get<Paginated<StockSummaryItem>>(
+      "/inventory/stock",
+      { params },
+    );
+    return res.data;
   },
   value: async () => {
     const res = await apiClient.get<{ success: boolean; data: StockValue }>(
@@ -47,7 +52,11 @@ export const inventoryApi = {
     );
     return res.data.data;
   },
-  receipts: async (params?: { search?: string }) => {
+  receipts: async (params?: {
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) => {
     const res = await apiClient.get<Paginated<ReceiptListItem>>(
       "/inventory/receipts",
       { params },

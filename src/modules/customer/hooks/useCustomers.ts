@@ -1,11 +1,22 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  keepPreviousData,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { customerApi } from "@modules/customer/api/customerApi";
 import { CustomerPayload } from "@modules/customer/types";
 
-export const useCustomers = (params?: { search?: string }) =>
+/** Paged customer list. */
+export const useCustomers = (params?: {
+  search?: string;
+  page?: number;
+  limit?: number;
+}) =>
   useQuery({
     queryKey: ["customers", params],
     queryFn: () => customerApi.list(params),
+    placeholderData: keepPreviousData,
   });
 
 export const useCustomer = (id: string) =>

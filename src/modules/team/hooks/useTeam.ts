@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  keepPreviousData,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { teamApi } from "@modules/team/api/teamApi";
 import { CreateUserPayload } from "@modules/team/types";
 
@@ -65,8 +70,15 @@ export const useRemoveUser = () => {
   });
 };
 
-export const useAuditLogs = (params?: { search?: string; action?: string }) =>
+/** Paged audit trail — append-only, so it grows continuously. */
+export const useAuditLogs = (params?: {
+  search?: string;
+  action?: string;
+  page?: number;
+  limit?: number;
+}) =>
   useQuery({
     queryKey: ["audit-logs", params],
     queryFn: () => teamApi.auditLogs(params),
+    placeholderData: keepPreviousData,
   });

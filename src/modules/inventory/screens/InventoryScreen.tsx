@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, TextInput, StyleSheet, useWindowDimensions } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import {
@@ -21,6 +21,7 @@ import {
   StatusChip,
   ChipsRow,
   EmptyState,
+  Pagination,
 } from "@shared/ui";
 
 const money = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
@@ -30,14 +31,40 @@ export default function InventoryScreen() {
   const { width } = useWindowDimensions();
   const cols = width >= 1000 ? 3 : width >= 640 ? 3 : 1;
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+
+  // Debounce — don't run a stock search on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Filter change → back to page 1 (adjusted during render, not in an effect).
+  const filterKey = `${debouncedSearch}|${filter}|${limit}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
 
   const { data: value } = useStockValue();
-  const params: { search?: string; lowStockOnly?: boolean } = {};
-  if (search.trim()) params.search = search.trim();
+  const params: {
+    search?: string;
+    lowStockOnly?: boolean;
+    page: number;
+    limit: number;
+  } = { page, limit };
+  if (debouncedSearch) params.search = debouncedSearch;
   if (filter === "low") params.lowStockOnly = true;
-  const { data: items, isLoading, refetch, isRefetching } = useStock(params);
-  const list = items ?? [];
+  const { data, isLoading, refetch, isRefetching } = useStock(params);
+  const list = data?.data ?? [];
+  const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.pages ?? 1;
+
+  if (!isLoading && totalPages > 0 && page > totalPages) setPage(totalPages);
 
   const tileW = cols === 1 ? "100%" : "33.33%";
 
@@ -127,6 +154,15 @@ export default function InventoryScreen() {
               }
             />
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+            label="products"
+          />
         </VStack>
       )}
     </Screen>

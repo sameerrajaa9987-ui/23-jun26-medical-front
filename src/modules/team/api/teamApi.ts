@@ -63,6 +63,7 @@ export const teamApi = {
     search?: string;
     action?: string;
     page?: number;
+    limit?: number;
   }) => {
     const res = await apiClient.get<Paginated<ActivityLog>>("/activity-logs", {
       params,

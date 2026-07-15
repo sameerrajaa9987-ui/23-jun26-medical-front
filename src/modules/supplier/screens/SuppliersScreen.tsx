@@ -17,6 +17,7 @@ import {
   Button,
   StatusChip,
   EmptyState,
+  Pagination,
 } from "@shared/ui";
 
 export default function SuppliersScreen() {
@@ -25,16 +26,33 @@ export default function SuppliersScreen() {
     PERMISSIONS.SUPPLIERS_MANAGE,
   );
   const [search, setSearch] = useState("");
-  const { data, isLoading, refetch, isRefetching } = useSuppliers(
-    search.trim() ? { search: search.trim() } : undefined,
-  );
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+
+  // Filter change → back to page 1 (adjusted during render, not in an effect).
+  const filterKey = `${search}|${limit}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const { data, isLoading, refetch, isRefetching } = useSuppliers({
+    ...(search.trim() ? { search: search.trim() } : {}),
+    page,
+    limit,
+  });
   const suppliers = data?.data ?? [];
+  const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.pages ?? 1;
+
+  if (!isLoading && totalPages > 0 && page > totalPages) setPage(totalPages);
 
   return (
     <Screen
       overline="Partners"
       title="Suppliers"
-      subtitle={`${data?.meta?.total ?? 0} suppliers`}
+      subtitle={`${total.toLocaleString("en-IN")} suppliers`}
       refreshing={isRefetching || isLoading}
       onRefresh={refetch}
       right={
@@ -77,6 +95,15 @@ export default function SuppliersScreen() {
               }
             />
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+            label="suppliers"
+          />
         </VStack>
       )}
     </Screen>

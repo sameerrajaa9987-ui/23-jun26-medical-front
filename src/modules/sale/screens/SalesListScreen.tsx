@@ -15,6 +15,7 @@ import {
   StatusChip,
   ChipsRow,
   EmptyState,
+  Pagination,
 } from "@shared/ui";
 
 const money = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
@@ -29,17 +30,37 @@ export default function SalesListScreen() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
 
-  const params: { search?: string; status?: string } = {};
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+
+  // Filter change → back to page 1 (adjusted during render, not in an effect).
+  const filterKey = `${search}|${status}|${limit}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const params: {
+    search?: string;
+    status?: string;
+    page: number;
+    limit: number;
+  } = { page, limit };
   if (search.trim()) params.search = search.trim();
   if (status !== "all") params.status = status;
   const { data, isLoading, refetch, isRefetching } = useSales(params);
   const sales = data?.data ?? [];
+  const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.pages ?? 1;
+
+  if (!isLoading && totalPages > 0 && page > totalPages) setPage(totalPages);
 
   return (
     <Screen
       overline="Sales"
       title="Invoices"
-      subtitle={`${data?.meta?.total ?? 0} sales`}
+      subtitle={`${total.toLocaleString("en-IN")} sales`}
       refreshing={isRefetching || isLoading}
       onRefresh={refetch}
       right={
@@ -90,6 +111,15 @@ export default function SalesListScreen() {
               onPress={() => navigation.navigate("SaleDetail", { id: s.id })}
             />
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+            label="sales"
+          />
         </VStack>
       )}
     </Screen>

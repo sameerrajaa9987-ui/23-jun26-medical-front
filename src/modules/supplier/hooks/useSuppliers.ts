@@ -1,11 +1,22 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  keepPreviousData,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { supplierApi } from "@modules/supplier/api/supplierApi";
 import { SupplierPayload } from "@modules/supplier/types";
 
-export const useSuppliers = (params?: { search?: string }) =>
+/** Paged supplier list. */
+export const useSuppliers = (params?: {
+  search?: string;
+  page?: number;
+  limit?: number;
+}) =>
   useQuery({
     queryKey: ["suppliers", params],
     queryFn: () => supplierApi.list(params),
+    placeholderData: keepPreviousData,
   });
 
 export const useSupplier = (id: string) =>
