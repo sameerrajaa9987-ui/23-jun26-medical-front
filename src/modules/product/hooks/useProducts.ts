@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   productApi,
   categoryApi,
@@ -13,6 +18,26 @@ export const useProducts = (params?: {
   useQuery({
     queryKey: ["products", params],
     queryFn: () => productApi.list(params),
+  });
+
+/**
+ * Paged catalogue browsing — the list can run to tens of thousands of products,
+ * so pages are fetched on demand ("Load more") instead of all at once.
+ */
+export const useProductsInfinite = (
+  params?: { search?: string; categoryId?: string },
+  limit = 50,
+) =>
+  useInfiniteQuery({
+    queryKey: ["products-infinite", params, limit],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      productApi.list({ ...params, page: pageParam as number, limit }),
+    getNextPageParam: (lastPage) => {
+      const page = lastPage?.meta?.page ?? 1;
+      const pages = lastPage?.meta?.pages ?? 1;
+      return page < pages ? page + 1 : undefined;
+    },
   });
 
 export const useProduct = (id: string) =>

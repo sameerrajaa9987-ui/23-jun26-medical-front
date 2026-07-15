@@ -13,6 +13,8 @@ export const productApi = {
     search?: string;
     categoryId?: string;
     brandId?: string;
+    page?: number;
+    limit?: number;
   }) => {
     const res = await apiClient.get<Paginated<ProductListItem>>("/products", {
       params,

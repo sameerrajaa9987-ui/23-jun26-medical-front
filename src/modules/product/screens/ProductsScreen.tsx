@@ -1,8 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, TextInput, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Search, Plus, Package, ChevronRight, Pill } from "lucide-react-native";
-import { useProducts, useCategories } from "@modules/product/hooks/useProducts";
+import {
+  useProductsInfinite,
+  useCategories,
+} from "@modules/product/hooks/useProducts";
 import { ProductListItem } from "@modules/product/types";
 import { useAuthStore } from "@shared/store/useAuthStore";
 import { PERMISSIONS } from "@shared/permissions";
@@ -24,15 +27,33 @@ export default function ProductsScreen() {
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canManage = hasPermission(PERMISSIONS.PRODUCTS_MANAGE);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [categoryId, setCategoryId] = useState("all");
+
+  // Debounce: the catalogue can hold tens of thousands of rows, so don't fire a
+  // server search on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const { data: categories } = useCategories();
   const params: { search?: string; categoryId?: string } = {};
-  if (search.trim()) params.search = search.trim();
+  if (debouncedSearch) params.search = debouncedSearch;
   if (categoryId !== "all") params.categoryId = categoryId;
 
-  const { data, isLoading, refetch, isRefetching } = useProducts(params);
-  const products = data?.data ?? [];
+  const {
+    data,
+    isLoading,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useProductsInfinite(params);
+
+  const products = data?.pages.flatMap((p) => p.data) ?? [];
+  const total = data?.pages[0]?.meta?.total ?? 0;
 
   const categoryChips = [
     { key: "all", label: "All" },
@@ -43,7 +64,7 @@ export default function ProductsScreen() {
     <Screen
       overline="Catalogue"
       title="Products"
-      subtitle={`${data?.meta?.total ?? 0} products`}
+      subtitle={`${total.toLocaleString("en-IN")} products`}
       refreshing={isRefetching || isLoading}
       onRefresh={refetch}
       right={
@@ -103,6 +124,29 @@ export default function ProductsScreen() {
               onPress={() => navigation.navigate("ProductForm", { id: p.id })}
             />
           ))}
+
+          {/* Paging — the catalogue is far too large to render in one go. */}
+          <VStack gap={10} align="center" style={{ paddingVertical: 16 }}>
+            <Text variant="body-sm" tone="tertiary">
+              Showing {products.length.toLocaleString("en-IN")} of{" "}
+              {total.toLocaleString("en-IN")}
+            </Text>
+            {hasNextPage ? (
+              <Button
+                label={isFetchingNextPage ? "Loading…" : "Load more"}
+                variant="secondary"
+                fullWidth={false}
+                loading={isFetchingNextPage}
+                onPress={() => fetchNextPage()}
+              />
+            ) : (
+              products.length > 0 && (
+                <Text variant="caption" tone="tertiary">
+                  End of list — use search to find a product faster
+                </Text>
+              )
+            )}
+          </VStack>
         </VStack>
       )}
     </Screen>
