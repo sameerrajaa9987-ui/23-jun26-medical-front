@@ -3,13 +3,10 @@ import { View, Pressable, StyleSheet } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import {
   Plus,
-  X,
   History,
   PackageCheck,
   ScanLine,
   AlertTriangle,
-  ChevronDown,
-  ChevronRight,
 } from "lucide-react-native";
 import { useProducts } from "@modules/product/hooks/useProducts";
 import { useAllLocations } from "@modules/warehouse/hooks/useWarehouse";
@@ -18,7 +15,17 @@ import {
   useCreateSupplier,
 } from "@modules/supplier/hooks/useSuppliers";
 import { useReceiveStock } from "@modules/inventory/hooks/useInventory";
-import { ReceiptLineInput, ScannedBill } from "@modules/inventory/types";
+import { ReceiveLineRow } from "@modules/inventory/components/ReceiveLineRow";
+import { DraftLine, ProductLite, ScannedBill } from "@modules/inventory/types";
+import {
+  emptyLine,
+  linesFromScan,
+  productsFromScan,
+  scanSummary,
+  duplicateWarning,
+  toReceiptLines,
+  totalBaseUnits,
+} from "@modules/inventory/receiveDraft";
 import { apiErrorMessage } from "@api/apiClient";
 import { palette, radius } from "@shared/designSystem";
 import {
@@ -33,139 +40,19 @@ import {
 } from "@shared/ui";
 import { useAuthStore } from "@shared/store/useAuthStore";
 
-/** The bits of a product this screen actually needs to show and do maths with. */
-interface ProductLite {
-  id: string;
-  name: string;
-  sku: string;
-  baseUnit: string;
-  packs: { unit: string; factor: number }[];
-}
-
-interface DraftLine {
-  productId: string | null;
-  batchNumber: string;
-  mfgDate: string;
-  expiryDate: string;
-  unit: string | null;
-  quantity: string;
-  purchasePrice: string;
-  locationId: string | null;
-  /** Set when the line came from a scanned bill and needs a human look. */
-  flagged?: boolean;
-}
-
-const emptyLine = (): DraftLine => ({
-  productId: null,
-  batchNumber: "",
-  mfgDate: "",
-  expiryDate: "",
-  unit: null,
-  quantity: "",
-  purchasePrice: "",
-  locationId: null,
-});
-
-/** ISO date -> YYYY-MM-DD for the date fields. */
-const isoToDate = (iso: string | null) => (iso ? String(iso).slice(0, 10) : "");
-
-type Tone = "ok" | "warn" | "todo";
-
 /**
- * What the collapsed row should say. A line is only "Ready" when it has
- * everything the server needs — otherwise the row must say what's missing, so
- * you can spot the gaps without opening 25 forms.
- */
-function lineStatus(l: DraftLine): { label: string; tone: Tone } {
-  if (!l.productId) return { label: "Product?", tone: "todo" };
-  if (!l.batchNumber.trim()) return { label: "Batch?", tone: "todo" };
-  if (!(Number(l.quantity) > 0)) return { label: "Qty?", tone: "todo" };
-  if (!l.locationId) return { label: "Location?", tone: "todo" };
-  if (l.flagged) return { label: "Check", tone: "warn" };
-  return { label: "Ready", tone: "ok" };
-}
-
-/** One-line gist of a row while it's collapsed. */
-function summaryLine(l: DraftLine, p: ProductLite | null): string {
-  const bits: string[] = [];
-  bits.push(
-    l.batchNumber.trim() ? `Batch ${l.batchNumber.trim()}` : "no batch",
-  );
-  if (Number(l.quantity) > 0) {
-    bits.push(`${l.quantity} ${l.unit || p?.baseUnit || "units"}`);
-  }
-  if (l.expiryDate) bits.push(`exp ${l.expiryDate}`);
-  return bits.join(" · ");
-}
-
-const pillTone = (t: Tone) =>
-  t === "ok"
-    ? {
-        backgroundColor: palette.success.bg,
-        borderColor: palette.success.border,
-      }
-    : t === "warn"
-      ? {
-          backgroundColor: palette.warning.bg,
-          borderColor: palette.warning.border,
-        }
-      : {
-          backgroundColor: palette.ink[100],
-          borderColor: palette.border.default,
-        };
-
-const pillTextColor = (t: Tone) =>
-  t === "ok"
-    ? palette.success.text
-    : t === "warn"
-      ? palette.warning.text
-      : palette.text.tertiary;
-
-/**
- * Turns a scanned bill into form lines.
+ * Receive Stock — goods-received note.
  *
- * Two rules, both deliberate:
- *  1. Only values our two OCR passes AGREED on are pre-filled — anything
- *     disputed is left BLANK so it must be typed, not rubber-stamped.
- *  2. The bill's QTY counts PACKS and its RATE is per PACK. We only pre-fill the
- *     unit when the server proved which pack it is, and we use the converted
- *     per-base-unit cost. If the pack couldn't be resolved we leave the unit
- *     blank rather than silently defaulting to base units — that mistake booked
- *     "1 ml" for a 60ml bottle.
+ * Orchestration only: state, data fetching and wiring. The draft rules live in
+ * `receiveDraft.ts` and a line's UI in `components/ReceiveLineRow`.
  */
-function linesFromScan(bill: ScannedBill): DraftLine[] {
-  return bill.lines.map((l) => {
-    const trust = <T,>(f: { value: T; confidence: "high" | "low" }) =>
-      f.confidence === "high" ? f.value : null;
-
-    const batch = trust(l.fields.batchNo);
-    const qty = trust(l.fields.quantity);
-    const expiryOk = l.fields.expiry.confidence === "high";
-    const rateOk = l.fields.rate.confidence === "high";
-    const unit = l.unitResolution?.resolved ? l.unitResolution.unit : null;
-    // Cost is only meaningful once the pack is known AND the rate was agreed.
-    const cost = unit && rateOk ? l.costPerBaseUnit : null;
-
-    return {
-      productId: l.match?.id || null,
-      batchNumber: batch ? String(batch) : "",
-      mfgDate: "",
-      expiryDate: expiryOk ? isoToDate(l.expiryDate) : "",
-      unit,
-      quantity: qty != null ? String(qty) : "",
-      purchasePrice: cost != null ? String(cost) : "",
-      locationId: null,
-      flagged: l.needsReview || !l.match,
-    };
-  });
-}
-
 export default function ReceiveStockScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  // The catalogue can run to tens of thousands of items, so we never try to load
-  // it all: the product picker searches server-side and we keep a local cache of
-  // everything we've already resolved (scan matches + past picks).
+
+  // The catalogue can run to tens of thousands of items, so it's never loaded
+  // whole: the picker searches server-side and `knownProducts` caches whatever
+  // we've already resolved (scan matches + past picks).
   const [productQuery, setProductQuery] = useState("");
   const { data: products, isFetching: productsLoading } = useProducts({
     search: productQuery || undefined,
@@ -184,20 +71,11 @@ export default function ReceiveStockScreen() {
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
   const [done, setDone] = useState<string | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
-  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
-  /**
-   * Every product we've resolved — scanner matches plus anything the user picks.
-   * The picker only ever searches a slice of the catalogue, so without this
-   * cache a chosen product would lose its name and unit as soon as the search
-   * text changed.
-   */
+  const [dupWarning, setDupWarning] = useState<string | null>(null);
   const [knownProducts, setKnownProducts] = useState<
     Record<string, ProductLite>
   >({});
-  /**
-   * Which rows are open. Collapsed by default: a scanned 25-line bill has to be
-   * scannable at a glance, not a kilometre of forms.
-   */
+  /** Open rows. Collapsed by default so a 25-line bill fits on one screen. */
   const [expanded, setExpanded] = useState<Set<number>>(new Set([0]));
 
   const toggleExpanded = (i: number) =>
@@ -208,47 +86,20 @@ export default function ReceiveStockScreen() {
       return next;
     });
 
-  // A scanned bill arrives as a route param — fill the form from it once, then
-  // clear the param so a re-render can't wipe the pharmacist's edits.
+  // A scanned bill arrives as a route param — consume it once, then clear it so
+  // a re-render can't wipe the pharmacist's edits.
   const scanned: ScannedBill | undefined = route.params?.scanned;
-  /* eslint-disable react-hooks/set-state-in-effect -- consuming a one-shot
-     route param: the scan result only exists once navigation delivers it. */
+  /* eslint-disable react-hooks/set-state-in-effect -- one-shot route param:
+     the scan result only exists once navigation delivers it. */
   useEffect(() => {
     if (!scanned) return;
-    const flagged = scanned.lines.filter(
-      (l) => l.needsReview || !l.match,
-    ).length;
-    const from = scanned.supplierName || "the bill";
-    const matched: Record<string, ProductLite> = {};
-    scanned.lines.forEach((l) => {
-      if (l.match) {
-        matched[l.match.id] = {
-          id: l.match.id,
-          name: l.match.name,
-          sku: l.match.sku,
-          baseUnit: l.match.baseUnit,
-          packs: l.match.packs || [],
-        };
-      }
-    });
-    setKnownProducts((cur) => ({ ...cur, ...matched }));
+    setKnownProducts((cur) => ({ ...cur, ...productsFromScan(scanned) }));
     setLines(linesFromScan(scanned));
-    // Every row collapsed — the point of scanning 25 lines is to see them all.
-    setExpanded(new Set());
+    setExpanded(new Set()); // all collapsed — the point is to see them all
     setReference(scanned.invoiceNo || "");
-    // Auto-link the supplier when the server matched one confidently.
     if (scanned.supplierMatch) setSupplierId(scanned.supplierMatch.id);
-    setScanNote(
-      flagged > 0
-        ? `${scanned.stats.total} lines from ${from} — ${flagged} need a check (unclear values were left blank). Pick a storage location for each line.`
-        : `${scanned.stats.total} lines from ${from} read cleanly. Pick a storage location for each line.`,
-    );
-    // A repeat invoice would double the stock — say so loudly, don't block.
-    setDuplicateWarning(
-      scanned.duplicate
-        ? `Invoice ${scanned.duplicate.referenceNo} was already received as ${scanned.duplicate.receiptNo} on ${new Date(scanned.duplicate.receivedAt).toLocaleDateString()}. Saving again will DOUBLE this stock.`
-        : null,
-    );
+    setScanNote(scanSummary(scanned));
+    setDupWarning(duplicateWarning(scanned));
     navigation.setParams({ scanned: undefined });
   }, [scanned, navigation]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -257,8 +108,11 @@ export default function ReceiveStockScreen() {
     value: s.id,
     label: s.name,
   }));
+  const locationOptions = (locations || []).map((l) => ({
+    value: l.id,
+    label: `${l.code} — ${l.name}`,
+  }));
 
-  /** Current search results, as ProductLite. */
   const searchResults = useMemo<ProductLite[]>(
     () =>
       (products?.data || []).map((p) => ({
@@ -271,18 +125,14 @@ export default function ReceiveStockScreen() {
     [products],
   );
 
-  /**
-   * Lookup for anything already on the form: the cache first, topped up with the
-   * current results. Used to render names and do the unit maths — never to
-   * populate the picker (that must show search results only).
-   */
+  /** Cache first, topped up with the live results — resolves anything on the form. */
   const productsById = useMemo(() => {
     const map: Record<string, ProductLite> = { ...knownProducts };
     for (const p of searchResults) map[p.id] = p;
     return map;
   }, [searchResults, knownProducts]);
 
-  /** The picker lists only what the search returned — the catalogue is far too big to list. */
+  /** The picker lists search results only — the catalogue is far too big to list. */
   const productOptions = useMemo(
     () =>
       searchResults.map((p) => ({
@@ -292,73 +142,32 @@ export default function ReceiveStockScreen() {
     [searchResults],
   );
 
+  const setLine = (i: number, patch: Partial<DraftLine>) =>
+    setLines((cur) =>
+      cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)),
+    );
+
   /** Remember every pick so its name/unit survives the next search. */
   const pickProduct = (i: number, id: string | null) => {
     const p = id ? productsById[id] : null;
     if (p) setKnownProducts((cur) => ({ ...cur, [p.id]: p }));
     setLine(i, { productId: id, unit: p?.baseUnit || null });
   };
-  const locationOptions = (locations || []).map((l) => ({
-    value: l.id,
-    label: `${l.code} — ${l.name}`,
-  }));
 
-  const unitOptions = (productId: string | null) => {
-    const p = productId ? productsById[productId] : null;
-    if (!p) return [];
-    return [
-      { value: p.baseUnit, label: `${p.baseUnit} (base)` },
-      ...(p.packs || []).map((pk) => ({
-        value: pk.unit,
-        label: `${pk.unit} (×${pk.factor} ${p.baseUnit})`,
-      })),
-    ];
-  };
-
-  const baseQty = (l: DraftLine) => {
-    const p = l.productId ? productsById[l.productId] : null;
-    const qty = Number(l.quantity) || 0;
-    if (!p) return 0;
-    if (!l.unit || l.unit === p.baseUnit) return qty;
-    const pk = (p.packs || []).find((x) => x.unit === l.unit);
-    return pk ? qty * pk.factor : qty;
-  };
-  const totalBase = lines.reduce((s, l) => s + baseQty(l), 0);
-
-  const setLine = (i: number, patch: Partial<DraftLine>) =>
-    setLines((cur) =>
-      cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)),
-    );
-  // A manually-added line is always the one you want to fill in next.
+  // A manually-added line is the one you want to fill in next.
   const addLine = () =>
     setLines((cur) => {
       setExpanded((e) => new Set(e).add(cur.length));
       return [...cur, emptyLine()];
     });
+
   const removeLine = (i: number) =>
     setLines((cur) =>
       cur.length === 1 ? cur : cur.filter((_, idx) => idx !== i),
     );
 
-  const validLines: ReceiptLineInput[] = lines
-    .filter(
-      (l) =>
-        l.productId &&
-        l.batchNumber.trim() &&
-        Number(l.quantity) > 0 &&
-        l.locationId,
-    )
-    .map((l) => ({
-      productId: l.productId!,
-      batchNumber: l.batchNumber.trim(),
-      mfgDate: l.mfgDate.trim() || undefined,
-      expiryDate: l.expiryDate.trim() || undefined,
-      purchasePrice:
-        l.purchasePrice === "" ? undefined : Number(l.purchasePrice),
-      unit: l.unit || undefined,
-      quantity: Number(l.quantity),
-      locationId: l.locationId!,
-    }));
+  const validLines = toReceiptLines(lines);
+  const totalBase = totalBaseUnits(lines, productsById);
 
   const submit = () => {
     if (!validLines.length) return;
@@ -372,8 +181,11 @@ export default function ReceiveStockScreen() {
         onSuccess: (r) => {
           setDone(r.receiptNo);
           setLines([emptyLine()]);
+          setExpanded(new Set([0]));
           setSupplierId(null);
           setReference("");
+          setScanNote(null);
+          setDupWarning(null);
         },
       },
     );
@@ -404,7 +216,7 @@ export default function ReceiveStockScreen() {
         </HStack>
       }
     >
-      {duplicateWarning && (
+      {dupWarning && (
         <View style={warnBox}>
           <HStack gap={8} align="flex-start">
             <AlertTriangle
@@ -416,7 +228,7 @@ export default function ReceiveStockScreen() {
               variant="body-sm"
               style={{ color: palette.warning.text, flex: 1 }}
             >
-              {duplicateWarning}
+              {dupWarning}
             </Text>
           </HStack>
         </View>
@@ -484,156 +296,23 @@ export default function ReceiveStockScreen() {
       </Card>
 
       <VStack gap={10}>
-        {lines.map((line, i) => {
-          const isOpen = expanded.has(i);
-          const product = line.productId ? productsById[line.productId] : null;
-          const status = lineStatus(line);
-          return (
-            <Card key={i} elevation="base" style={{ padding: 0 }}>
-              {/* Compact row — the whole point: 25 of these fit on one screen. */}
-              <Pressable
-                onPress={() => toggleExpanded(i)}
-                style={styles.rowHead}
-              >
-                {isOpen ? (
-                  <ChevronDown
-                    size={17}
-                    color={palette.text.tertiary}
-                    strokeWidth={2}
-                  />
-                ) : (
-                  <ChevronRight
-                    size={17}
-                    color={palette.text.tertiary}
-                    strokeWidth={2}
-                  />
-                )}
-                <VStack gap={2} flex={1}>
-                  <Text
-                    variant="label-lg"
-                    tone={product ? "primary" : "tertiary"}
-                    numberOfLines={1}
-                  >
-                    {i + 1}. {product ? product.name : "Choose a product"}
-                  </Text>
-                  <Text variant="caption" tone="tertiary" numberOfLines={1}>
-                    {summaryLine(line, product)}
-                  </Text>
-                </VStack>
-                <View style={[styles.pill, pillTone(status.tone)]}>
-                  <Text
-                    variant="label-sm"
-                    style={{ color: pillTextColor(status.tone) }}
-                  >
-                    {status.label}
-                  </Text>
-                </View>
-                {lines.length > 1 && (
-                  <Pressable
-                    onPress={() => removeLine(i)}
-                    hitSlop={8}
-                    style={styles.removeBtn}
-                  >
-                    <X size={15} color={palette.danger.text} strokeWidth={2} />
-                  </Pressable>
-                )}
-              </Pressable>
-
-              {isOpen && (
-                <VStack gap={14} style={styles.rowBody}>
-                  <Select
-                    label="Product"
-                    placeholder="Search by name or SKU…"
-                    value={line.productId}
-                    options={productOptions}
-                    selectedLabel={
-                      product ? `${product.name} · ${product.sku}` : undefined
-                    }
-                    onSearch={setProductQuery}
-                    loading={productsLoading}
-                    onChange={(v) => pickProduct(i, v)}
-                  />
-
-                  <HStack gap={12}>
-                    <View style={{ flex: 1.2 }}>
-                      <TextField
-                        label="Batch no."
-                        value={line.batchNumber}
-                        onChangeText={(v) => setLine(i, { batchNumber: v })}
-                        placeholder="B-001"
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <TextField
-                        label="Quantity"
-                        value={line.quantity}
-                        onChangeText={(v) => setLine(i, { quantity: v })}
-                        keyboardType="decimal-pad"
-                        placeholder="0"
-                      />
-                    </View>
-                  </HStack>
-
-                  <Select
-                    label="Unit"
-                    placeholder="Unit"
-                    value={line.unit}
-                    options={unitOptions(line.productId)}
-                    onChange={(v) => setLine(i, { unit: v })}
-                  />
-
-                  <HStack gap={12}>
-                    <View style={{ flex: 1 }}>
-                      <TextField
-                        label="Mfg date"
-                        value={line.mfgDate}
-                        onChangeText={(v) => setLine(i, { mfgDate: v })}
-                        placeholder="YYYY-MM-DD"
-                        autoCapitalize="none"
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <TextField
-                        label="Expiry date"
-                        value={line.expiryDate}
-                        onChangeText={(v) => setLine(i, { expiryDate: v })}
-                        placeholder="YYYY-MM-DD"
-                        autoCapitalize="none"
-                      />
-                    </View>
-                  </HStack>
-
-                  <HStack gap={12}>
-                    <View style={{ flex: 1 }}>
-                      <TextField
-                        label="Cost / base unit (₹)"
-                        value={line.purchasePrice}
-                        onChangeText={(v) => setLine(i, { purchasePrice: v })}
-                        keyboardType="decimal-pad"
-                        placeholder="0.00"
-                      />
-                    </View>
-                    <View style={{ flex: 1.4 }}>
-                      <Select
-                        label="Storage location"
-                        placeholder="Where?"
-                        value={line.locationId}
-                        options={locationOptions}
-                        onChange={(v) => setLine(i, { locationId: v })}
-                      />
-                    </View>
-                  </HStack>
-
-                  {line.productId && Number(line.quantity) > 0 && (
-                    <Text variant="caption" tone="tertiary">
-                      = {baseQty(line)} {product?.baseUnit} in base units
-                    </Text>
-                  )}
-                </VStack>
-              )}
-            </Card>
-          );
-        })}
+        {lines.map((line, i) => (
+          <ReceiveLineRow
+            key={i}
+            index={i}
+            line={line}
+            product={line.productId ? productsById[line.productId] : null}
+            open={expanded.has(i)}
+            onToggle={() => toggleExpanded(i)}
+            onChange={(patch) => setLine(i, patch)}
+            onPickProduct={(id) => pickProduct(i, id)}
+            onRemove={lines.length > 1 ? () => removeLine(i) : undefined}
+            productOptions={productOptions}
+            onSearchProducts={setProductQuery}
+            productsLoading={productsLoading}
+            locationOptions={locationOptions}
+          />
+        ))}
       </VStack>
 
       <Pressable onPress={addLine} style={styles.addRow}>
@@ -666,34 +345,6 @@ export default function ReceiveStockScreen() {
 }
 
 const styles = StyleSheet.create({
-  rowHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  rowBody: {
-    paddingHorizontal: 14,
-    paddingBottom: 16,
-    paddingTop: 2,
-    borderTopWidth: 1,
-    borderTopColor: palette.border.subtle,
-  },
-  pill: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: radius.full,
-    borderWidth: 1,
-  },
-  removeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.sm,
-    backgroundColor: palette.danger.bg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   addRow: {
     flexDirection: "row",
     alignItems: "center",

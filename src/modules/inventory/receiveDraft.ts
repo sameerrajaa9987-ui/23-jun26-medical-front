@@ -1,0 +1,186 @@
+import {
+  DraftLine,
+  ProductLite,
+  ReceiptLineInput,
+  ScannedBill,
+} from "@modules/inventory/types";
+
+/**
+ * Goods-received draft rules.
+ *
+ * All the decisions the Receive Stock form makes — what a scan may pre-fill,
+ * when a line is safe to save, how pack quantities convert to base units — live
+ * here as pure functions so they can be reasoned about (and tested) without
+ * rendering a screen. The screen stays presentation + wiring.
+ */
+
+export type LineTone = "ok" | "warn" | "todo";
+
+export const emptyLine = (): DraftLine => ({
+  productId: null,
+  batchNumber: "",
+  mfgDate: "",
+  expiryDate: "",
+  unit: null,
+  quantity: "",
+  purchasePrice: "",
+  locationId: null,
+});
+
+/** ISO timestamp -> YYYY-MM-DD for the date fields. */
+export const isoToDate = (iso: string | null) =>
+  iso ? String(iso).slice(0, 10) : "";
+
+/** Units this product can be received in: its base unit plus any packs. */
+export function unitOptions(
+  product?: ProductLite | null,
+): { value: string; label: string }[] {
+  if (!product) return [];
+  return [
+    { value: product.baseUnit, label: `${product.baseUnit} (base)` },
+    ...(product.packs || []).map((p) => ({
+      value: p.unit,
+      label: `${p.unit} (×${p.factor} ${product.baseUnit})`,
+    })),
+  ];
+}
+
+/** Quantity converted into base units — a pack of 15 tablets is 15, not 1. */
+export function baseQty(line: DraftLine, product?: ProductLite | null): number {
+  const qty = Number(line.quantity) || 0;
+  if (!product) return 0;
+  if (!line.unit || line.unit === product.baseUnit) return qty;
+  const pack = (product.packs || []).find((p) => p.unit === line.unit);
+  return pack ? qty * pack.factor : qty;
+}
+
+export function totalBaseUnits(
+  lines: DraftLine[],
+  byId: Record<string, ProductLite>,
+): number {
+  return lines.reduce(
+    (sum, l) => sum + baseQty(l, l.productId ? byId[l.productId] : null),
+    0,
+  );
+}
+
+/**
+ * What a collapsed row should say. A line is only "Ready" once it has
+ * everything the server requires — otherwise the row names the gap, so 25 lines
+ * can be triaged without opening 25 forms.
+ */
+export function lineStatus(line: DraftLine): { label: string; tone: LineTone } {
+  if (!line.productId) return { label: "Product?", tone: "todo" };
+  if (!line.batchNumber.trim()) return { label: "Batch?", tone: "todo" };
+  if (!(Number(line.quantity) > 0)) return { label: "Qty?", tone: "todo" };
+  if (!line.locationId) return { label: "Location?", tone: "todo" };
+  if (line.flagged) return { label: "Check", tone: "warn" };
+  return { label: "Ready", tone: "ok" };
+}
+
+/** One-line gist of a row while it's collapsed. */
+export function summaryLine(line: DraftLine, product?: ProductLite | null) {
+  const bits: string[] = [
+    line.batchNumber.trim() ? `Batch ${line.batchNumber.trim()}` : "no batch",
+  ];
+  if (Number(line.quantity) > 0) {
+    bits.push(`${line.quantity} ${line.unit || product?.baseUnit || "units"}`);
+  }
+  if (line.expiryDate) bits.push(`exp ${line.expiryDate}`);
+  return bits.join(" · ");
+}
+
+/**
+ * Turns a scanned bill into form lines.
+ *
+ * Two deliberate rules:
+ *  1. Only values both OCR passes AGREED on are pre-filled — anything disputed
+ *     is left BLANK so it must be typed rather than rubber-stamped.
+ *  2. The bill's QTY counts PACKS and its RATE is per PACK. The unit is only
+ *     pre-filled when the server proved which pack it is, and the cost is the
+ *     converted per-base-unit figure. Defaulting to base units silently booked
+ *     "1 ml" for a 60ml bottle — never again.
+ */
+export function linesFromScan(bill: ScannedBill): DraftLine[] {
+  return bill.lines.map((l) => {
+    const trust = <T>(f: { value: T; confidence: "high" | "low" }) =>
+      f.confidence === "high" ? f.value : null;
+
+    const batch = trust(l.fields.batchNo);
+    const qty = trust(l.fields.quantity);
+    const expiryOk = l.fields.expiry.confidence === "high";
+    const rateOk = l.fields.rate.confidence === "high";
+    const unit = l.unitResolution?.resolved ? l.unitResolution.unit : null;
+    // Cost only means anything once the pack is known AND the rate was agreed.
+    const cost = unit && rateOk ? l.costPerBaseUnit : null;
+
+    return {
+      productId: l.match?.id || null,
+      batchNumber: batch ? String(batch) : "",
+      mfgDate: "",
+      expiryDate: expiryOk ? isoToDate(l.expiryDate) : "",
+      unit,
+      quantity: qty != null ? String(qty) : "",
+      purchasePrice: cost != null ? String(cost) : "",
+      locationId: null,
+      flagged: l.needsReview || !l.match,
+    };
+  });
+}
+
+/** Every product the scan resolved, keyed by id — seeds the picker's cache. */
+export function productsFromScan(
+  bill: ScannedBill,
+): Record<string, ProductLite> {
+  const map: Record<string, ProductLite> = {};
+  for (const l of bill.lines) {
+    if (!l.match) continue;
+    map[l.match.id] = {
+      id: l.match.id,
+      name: l.match.name,
+      sku: l.match.sku,
+      baseUnit: l.match.baseUnit,
+      packs: l.match.packs || [],
+    };
+  }
+  return map;
+}
+
+/** The note shown after a scan: how many lines, and how many need attention. */
+export function scanSummary(bill: ScannedBill): string {
+  const from = bill.supplierName || "the bill";
+  const flagged = bill.lines.filter((l) => l.needsReview || !l.match).length;
+  return flagged > 0
+    ? `${bill.stats.total} lines from ${from} — ${flagged} need a check (unclear values were left blank). Pick a storage location for each line.`
+    : `${bill.stats.total} lines from ${from} read cleanly. Pick a storage location for each line.`;
+}
+
+/** Re-receiving an invoice doubles the stock — this is the sentence that warns. */
+export function duplicateWarning(bill: ScannedBill): string | null {
+  if (!bill.duplicate) return null;
+  const when = new Date(bill.duplicate.receivedAt).toLocaleDateString();
+  return `Invoice ${bill.duplicate.referenceNo} was already received as ${bill.duplicate.receiptNo} on ${when}. Saving again will DOUBLE this stock.`;
+}
+
+/** Only complete lines are sent; the rest are still being worked on. */
+export function toReceiptLines(lines: DraftLine[]): ReceiptLineInput[] {
+  return lines
+    .filter(
+      (l) =>
+        l.productId &&
+        l.batchNumber.trim() &&
+        Number(l.quantity) > 0 &&
+        l.locationId,
+    )
+    .map((l) => ({
+      productId: l.productId!,
+      batchNumber: l.batchNumber.trim(),
+      mfgDate: l.mfgDate.trim() || undefined,
+      expiryDate: l.expiryDate.trim() || undefined,
+      purchasePrice:
+        l.purchasePrice === "" ? undefined : Number(l.purchasePrice),
+      unit: l.unit || undefined,
+      quantity: Number(l.quantity),
+      locationId: l.locationId!,
+    }));
+}

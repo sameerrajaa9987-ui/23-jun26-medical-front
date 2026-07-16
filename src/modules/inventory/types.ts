@@ -74,6 +74,29 @@ export interface ReceiptLineInput {
   locationId: string;
 }
 
+/** The bits of a product the receive flow needs to display and do maths with. */
+export interface ProductLite {
+  id: string;
+  name: string;
+  sku: string;
+  baseUnit: string;
+  packs: { unit: string; factor: number }[];
+}
+
+/** One in-progress goods-received line as held by the form. */
+export interface DraftLine {
+  productId: string | null;
+  batchNumber: string;
+  mfgDate: string;
+  expiryDate: string;
+  unit: string | null;
+  quantity: string;
+  purchasePrice: string;
+  locationId: string | null;
+  /** Came from a scanned bill and needs a human look before saving. */
+  flagged?: boolean;
+}
+
 export interface ReceivePayload {
   supplierId?: string | null;
   supplierName?: string;
