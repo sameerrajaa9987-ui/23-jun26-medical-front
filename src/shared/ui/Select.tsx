@@ -1,6 +1,13 @@
-import React, { useState } from "react";
-import { View, Pressable, Modal, ScrollView, StyleSheet } from "react-native";
-import { ChevronDown, Check, Plus, X } from "lucide-react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  Pressable,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
+import { ChevronDown, Check, Plus, X, Search } from "lucide-react-native";
 import { palette, radius, outline, shadows } from "../designSystem";
 import { Text } from "./Text";
 import { TextField } from "./TextField";
@@ -21,9 +28,24 @@ interface Props {
     label: string,
   ) => Promise<{ value: string; label: string } | void>;
   allowClear?: boolean;
+  /** Force the search box on/off. Defaults to on once the list gets long. */
+  searchable?: boolean;
+  /**
+   * Server-side search. When given, typing calls this (debounced) instead of
+   * filtering locally — required for catalogues too big to ship to the client.
+   */
+  onSearch?: (query: string) => void;
+  /** Show a spinner while `onSearch` results are loading. */
+  loading?: boolean;
+  /** Label shown for the currently-selected value if it isn't in `options`. */
+  selectedLabel?: string;
 }
 
-/** Select — a labeled field that opens a modal option list (web + native). */
+// Never render more than this at once: a 100k-option list would lock the UI.
+const RENDER_CAP = 100;
+const SEARCH_DEBOUNCE_MS = 300;
+
+/** Select — a labeled field that opens a searchable modal option list. */
 export function Select({
   label,
   placeholder = "Select…",
@@ -32,11 +54,53 @@ export function Select({
   onChange,
   onCreate,
   allowClear,
+  searchable,
+  onSearch,
+  loading,
+  selectedLabel,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState("");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const selected = options.find((o) => o.value === value);
+  // Fall back to a caller-supplied label so a selected item still shows even
+  // when it isn't in the current (searched/paged) option window.
+  const shownLabel = selected?.label || (value ? selectedLabel : undefined);
+
+  // Search once the list is long enough to be annoying, or when asked.
+  const showSearch = searchable ?? (Boolean(onSearch) || options.length > 8);
+
+  // Debounce server-side search so we don't fire a request per keystroke.
+  useEffect(() => {
+    if (!onSearch) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(
+      () => onSearch(query.trim()),
+      SEARCH_DEBOUNCE_MS,
+    );
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [query, onSearch]);
+
+  // Local filtering only when the caller isn't searching server-side.
+  const filtered = useMemo(() => {
+    if (onSearch || !query.trim()) return options;
+    const q = query.trim().toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query, onSearch]);
+
+  const visible = filtered.slice(0, RENDER_CAP);
+  const hidden = filtered.length - visible.length;
+
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+    onSearch?.("");
+  };
 
   const create = async () => {
     if (!onCreate || !newLabel.trim()) return;
@@ -45,7 +109,7 @@ export function Select({
       const made = await onCreate(newLabel.trim());
       if (made) onChange(made.value);
       setNewLabel("");
-      setOpen(false);
+      close();
     } finally {
       setCreating(false);
     }
@@ -61,11 +125,11 @@ export function Select({
       <Pressable onPress={() => setOpen(true)} style={styles.field}>
         <Text
           variant="body"
-          tone={selected ? "primary" : "tertiary"}
+          tone={shownLabel ? "primary" : "tertiary"}
           numberOfLines={1}
           style={{ flex: 1 }}
         >
-          {selected ? selected.label : placeholder}
+          {shownLabel || placeholder}
         </Text>
         <ChevronDown
           size={18}
@@ -78,44 +142,71 @@ export function Select({
         visible={open}
         transparent
         animationType="fade"
-        onRequestClose={() => setOpen(false)}
+        onRequestClose={close}
       >
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={close}>
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.sheetHeader}>
               <Text variant="h4" tone="primary">
                 {label || "Select"}
               </Text>
-              <Pressable onPress={() => setOpen(false)} hitSlop={8}>
+              <Pressable onPress={close} hitSlop={8}>
                 <X size={20} color={palette.text.tertiary} strokeWidth={2} />
               </Pressable>
             </View>
 
-            <ScrollView style={{ maxHeight: 320 }}>
-              {allowClear && (
+            {showSearch && (
+              <View style={styles.searchRow}>
+                <Search
+                  size={16}
+                  color={palette.text.tertiary}
+                  strokeWidth={2}
+                />
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    placeholder="Type to search…"
+                    value={query}
+                    onChangeText={setQuery}
+                    autoCapitalize="none"
+                  />
+                </View>
+                {loading && <ActivityIndicator color={palette.teal[600]} />}
+              </View>
+            )}
+
+            <ScrollView
+              style={{ maxHeight: 320 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {allowClear && !query && (
                 <OptionRow
                   label="None"
                   selected={!value}
                   onPress={() => {
                     onChange(null);
-                    setOpen(false);
+                    close();
                   }}
                 />
               )}
-              {options.map((o) => (
+              {visible.map((o) => (
                 <OptionRow
                   key={o.value}
                   label={o.label}
                   selected={o.value === value}
                   onPress={() => {
                     onChange(o.value);
-                    setOpen(false);
+                    close();
                   }}
                 />
               ))}
-              {options.length === 0 && (
+              {!visible.length && !loading && (
                 <Text variant="body-sm" tone="tertiary" style={{ padding: 16 }}>
-                  No options yet.
+                  {query ? `No matches for "${query}"` : "No options yet."}
+                </Text>
+              )}
+              {hidden > 0 && (
+                <Text variant="caption" tone="tertiary" style={{ padding: 12 }}>
+                  +{hidden} more — keep typing to narrow it down.
                 </Text>
               )}
             </ScrollView>
@@ -167,6 +258,7 @@ function OptionRow({
         variant="body"
         tone={selected ? "accent" : "primary"}
         style={{ flex: 1 }}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -208,6 +300,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 12,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
   },
   optionRow: {
     flexDirection: "row",
