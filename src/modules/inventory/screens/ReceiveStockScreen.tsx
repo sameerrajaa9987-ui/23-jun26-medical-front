@@ -1,7 +1,14 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Pressable, StyleSheet } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { Plus, X, History, PackageCheck } from "lucide-react-native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  Plus,
+  X,
+  History,
+  PackageCheck,
+  ScanLine,
+  AlertTriangle,
+} from "lucide-react-native";
 import { useProducts } from "@modules/product/hooks/useProducts";
 import { useAllLocations } from "@modules/warehouse/hooks/useWarehouse";
 import {
@@ -9,7 +16,11 @@ import {
   useCreateSupplier,
 } from "@modules/supplier/hooks/useSuppliers";
 import { useReceiveStock } from "@modules/inventory/hooks/useInventory";
-import { ReceiptLineInput } from "@modules/inventory/types";
+import {
+  ReceiptLineInput,
+  ScannedBill,
+  OcrProductRef,
+} from "@modules/inventory/types";
 import { apiErrorMessage } from "@api/apiClient";
 import { palette, radius } from "@shared/designSystem";
 import {
@@ -33,6 +44,8 @@ interface DraftLine {
   quantity: string;
   purchasePrice: string;
   locationId: string | null;
+  /** Set when the line came from a scanned bill and needs a human look. */
+  flagged?: boolean;
 }
 
 const emptyLine = (): DraftLine => ({
@@ -46,9 +59,46 @@ const emptyLine = (): DraftLine => ({
   locationId: null,
 });
 
+/** ISO date -> YYYY-MM-DD for the date fields. */
+const isoToDate = (iso: string | null) => (iso ? String(iso).slice(0, 10) : "");
+
+/**
+ * Turns a scanned bill into form lines.
+ *
+ * Only values our two OCR passes agreed on are pre-filled — anything disputed is
+ * deliberately left BLANK so it must be typed rather than rubber-stamped. That
+ * is the whole point of the review step.
+ */
+function linesFromScan(bill: ScannedBill): DraftLine[] {
+  return bill.lines.map((l) => {
+    const trust = <T,>(f: { value: T; confidence: "high" | "low" }) =>
+      f.confidence === "high" ? f.value : null;
+
+    const batch = trust(l.fields.batchNo);
+    const qty = trust(l.fields.quantity);
+    const rate = trust(l.fields.rate);
+    const expiryOk = l.fields.expiry.confidence === "high";
+
+    return {
+      productId: l.match?.id || null,
+      batchNumber: batch ? String(batch) : "",
+      mfgDate: "",
+      expiryDate: expiryOk ? isoToDate(l.expiryDate) : "",
+      unit: l.match?.baseUnit || null,
+      quantity: qty != null ? String(qty) : "",
+      purchasePrice: rate != null ? String(rate) : "",
+      locationId: null,
+      flagged: l.needsReview || !l.match,
+    };
+  });
+}
+
 export default function ReceiveStockScreen() {
   const navigation = useNavigation<any>();
-  const { data: products } = useProducts();
+  const route = useRoute<any>();
+  // The picker needs the whole catalogue, not just page 1 — otherwise a product
+  // that exists (and that the bill scanner matched) can't be selected here.
+  const { data: products } = useProducts({ limit: 200 });
   const { data: locations } = useAllLocations();
   const canManageSuppliers = useAuthStore((s) => s.hasPermission)(
     "suppliers.manage",
@@ -61,20 +111,92 @@ export default function ReceiveStockScreen() {
   const [referenceNo, setReference] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
   const [done, setDone] = useState<string | null>(null);
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  /**
+   * Products the bill scanner matched. The scanner searches the whole catalogue
+   * server-side, so it can return a product that isn't on the page we loaded —
+   * keeping them here means the picker can still resolve and display it however
+   * large the catalogue grows.
+   */
+  const [scanProducts, setScanProducts] = useState<
+    Record<string, OcrProductRef>
+  >({});
+
+  // A scanned bill arrives as a route param — fill the form from it once, then
+  // clear the param so a re-render can't wipe the pharmacist's edits.
+  const scanned: ScannedBill | undefined = route.params?.scanned;
+  /* eslint-disable react-hooks/set-state-in-effect -- consuming a one-shot
+     route param: the scan result only exists once navigation delivers it. */
+  useEffect(() => {
+    if (!scanned) return;
+    const flagged = scanned.lines.filter(
+      (l) => l.needsReview || !l.match,
+    ).length;
+    const from = scanned.supplierName || "the bill";
+    const matched: Record<string, OcrProductRef> = {};
+    scanned.lines.forEach((l) => {
+      if (l.match) matched[l.match.id] = l.match;
+    });
+    setScanProducts(matched);
+    setLines(linesFromScan(scanned));
+    setReference(scanned.invoiceNo || "");
+    setScanNote(
+      flagged > 0
+        ? `${scanned.stats.total} lines from ${from} — ${flagged} need a check (unclear values were left blank). Pick a storage location for each line.`
+        : `${scanned.stats.total} lines from ${from} read cleanly. Pick a storage location for each line.`,
+    );
+    navigation.setParams({ scanned: undefined });
+  }, [scanned, navigation]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const supplierOptions = (suppliers?.data || []).map((s) => ({
     value: s.id,
     label: s.name,
   }));
 
-  const productsById = useMemo(
-    () => Object.fromEntries((products?.data || []).map((p) => [p.id, p])),
-    [products],
+  /** Catalogue page + any product the scanner matched (which may not be on it). */
+  const productsById = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        id: string;
+        name: string;
+        sku: string;
+        baseUnit: string;
+        packs: { unit: string; factor: number }[];
+      }
+    > = {};
+    for (const p of products?.data || []) {
+      map[p.id] = {
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        baseUnit: p.baseUnit,
+        packs: p.packs || [],
+      };
+    }
+    for (const [id, p] of Object.entries(scanProducts)) {
+      if (!map[id]) {
+        map[id] = {
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          baseUnit: p.baseUnit,
+          packs: p.packs || [],
+        };
+      }
+    }
+    return map;
+  }, [products, scanProducts]);
+
+  const productOptions = useMemo(
+    () =>
+      Object.values(productsById).map((p) => ({
+        value: p.id,
+        label: `${p.name} · ${p.sku}`,
+      })),
+    [productsById],
   );
-  const productOptions = (products?.data || []).map((p) => ({
-    value: p.id,
-    label: `${p.name} · ${p.sku}`,
-  }));
   const locationOptions = (locations || []).map((l) => ({
     value: l.id,
     label: `${l.code} — ${l.name}`,
@@ -157,17 +279,38 @@ export default function ReceiveStockScreen() {
       title="Receive stock"
       subtitle="Goods received note — batch, expiry, location & cost"
       right={
-        <Button
-          label="History"
-          variant="secondary"
-          fullWidth={false}
-          icon={
-            <History size={16} color={palette.text.primary} strokeWidth={2} />
-          }
-          onPress={() => navigation.navigate("Receipts")}
-        />
+        <HStack gap={8}>
+          <Button
+            label="Scan bill"
+            fullWidth={false}
+            icon={<ScanLine size={16} color="#FFFFFF" strokeWidth={2} />}
+            onPress={() => navigation.navigate("ScanBill")}
+          />
+          <Button
+            label="History"
+            variant="secondary"
+            fullWidth={false}
+            icon={
+              <History size={16} color={palette.text.primary} strokeWidth={2} />
+            }
+            onPress={() => navigation.navigate("Receipts")}
+          />
+        </HStack>
       }
     >
+      {scanNote && (
+        <View style={infoBox}>
+          <HStack gap={8} align="center">
+            <ScanLine size={16} color={palette.info.text} strokeWidth={2} />
+            <Text
+              variant="body-sm"
+              style={{ color: palette.info.text, flex: 1 }}
+            >
+              {scanNote}
+            </Text>
+          </HStack>
+        </View>
+      )}
       {done && (
         <View style={okBox}>
           <HStack gap={8} align="center">
@@ -222,9 +365,23 @@ export default function ReceiveStockScreen() {
           <Card key={i} elevation="base">
             <VStack gap={14}>
               <HStack align="center" justify="space-between">
-                <Text variant="label-lg" tone="primary">
-                  Line {i + 1}
-                </Text>
+                <HStack gap={8} align="center">
+                  <Text variant="label-lg" tone="primary">
+                    Line {i + 1}
+                  </Text>
+                  {line.flagged && (
+                    <HStack gap={4} align="center">
+                      <AlertTriangle
+                        size={13}
+                        color={palette.warning.text}
+                        strokeWidth={2.2}
+                      />
+                      <Text variant="label-sm" tone="warning">
+                        check this
+                      </Text>
+                    </HStack>
+                  )}
+                </HStack>
                 {lines.length > 1 && (
                   <Pressable
                     onPress={() => removeLine(i)}
@@ -389,5 +546,13 @@ const okBox = {
   backgroundColor: palette.success.bg,
   borderWidth: 1,
   borderColor: palette.success.border,
+  marginBottom: 16,
+} as const;
+const infoBox = {
+  padding: 14,
+  borderRadius: radius.md,
+  backgroundColor: palette.info.bg,
+  borderWidth: 1,
+  borderColor: palette.info.border,
   marginBottom: 16,
 } as const;

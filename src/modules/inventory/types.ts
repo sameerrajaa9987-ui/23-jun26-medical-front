@@ -137,3 +137,70 @@ export interface Paginated<T> {
   data: T[];
   meta: { total: number; pages: number; page: number };
 }
+
+/* ---------------- Bill scan (OCR) ---------------- */
+
+/** One extracted value plus how much we trust it. */
+export interface OcrField<T = string | number | null> {
+  value: T;
+  /** "high" = two independent reads agreed AND the rules passed. */
+  confidence: "high" | "low";
+  /** The rival reading, when the two passes disagreed. */
+  alternative: T | null;
+  reason: string | null;
+}
+
+export interface OcrProductRef {
+  id: string;
+  name: string;
+  sku: string;
+  baseUnit: string;
+  packs: { unit: string; factor: number }[];
+  mrp: number;
+  taxRatePct: number;
+  score?: number;
+}
+
+export interface ScannedLine {
+  productName: string | null;
+  pack: string | null;
+  batchNo: string | null;
+  expiry: string | null;
+  expiryDate: string | null;
+  quantity: number | null;
+  mrp: number | null;
+  rate: number | null;
+  gstPct: number | null;
+  fields: {
+    batchNo: OcrField<string | null>;
+    expiry: OcrField<string | null>;
+    quantity: OcrField<number | null>;
+    mrp: OcrField<number | null>;
+    rate: OcrField<number | null>;
+    gstPct: OcrField<number | null>;
+    pack: OcrField<string | null>;
+  };
+  /** Catalogue link — null when we couldn't match confidently. */
+  match: OcrProductRef | null;
+  matchScore: number;
+  suggestions: OcrProductRef[];
+  needsReview: boolean;
+  criticalIssues: string[];
+  lowFields: string[];
+  missing: string[];
+}
+
+export interface ScannedBill {
+  supplierName: string | null;
+  invoiceNo: string | null;
+  invoiceDate: string | null;
+  rotation: number;
+  lines: ScannedLine[];
+  stats: {
+    total: number;
+    matched: number;
+    needsReview: number;
+    confident: number;
+    readScore: number;
+  };
+}
