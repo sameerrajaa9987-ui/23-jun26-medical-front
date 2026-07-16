@@ -332,10 +332,34 @@ function LineCard({ line }: { line: ScannedLine }) {
         {line.match ? (
           <Text variant="caption" tone="tertiary" numberOfLines={1}>
             → {line.match.name} · {line.match.sku}
+            {line.unitResolution?.resolved && line.unitResolution.factor
+              ? ` · ${line.quantity ?? "?"} × ${line.unitResolution.unit} (${line.unitResolution.factor} ${line.match.baseUnit} each)`
+              : ""}
           </Text>
         ) : (
           <Text variant="caption" tone="warning">
             Not matched to a product — you&apos;ll pick it on the next screen
+          </Text>
+        )}
+
+        {/* The bill counts packs; if we couldn't prove which pack, say so. */}
+        {line.match && !line.unitResolution?.resolved && (
+          <Text variant="caption" tone="warning">
+            {line.unitResolution?.reason || "Unit unclear — choose it next"}
+          </Text>
+        )}
+
+        {/* Resolved, but the bill sells multi-packs — worth a glance. */}
+        {line.unitResolution?.note && (
+          <Text variant="caption" tone="tertiary">
+            {line.unitResolution.note}
+          </Text>
+        )}
+
+        {line.freeQty > 0 && (
+          <Text variant="caption" tone="warning">
+            +{line.freeQty} free on this bill — add them if you&apos;re stocking
+            them
           </Text>
         )}
       </VStack>

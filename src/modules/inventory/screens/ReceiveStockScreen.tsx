@@ -65,9 +65,14 @@ const isoToDate = (iso: string | null) => (iso ? String(iso).slice(0, 10) : "");
 /**
  * Turns a scanned bill into form lines.
  *
- * Only values our two OCR passes agreed on are pre-filled — anything disputed is
- * deliberately left BLANK so it must be typed rather than rubber-stamped. That
- * is the whole point of the review step.
+ * Two rules, both deliberate:
+ *  1. Only values our two OCR passes AGREED on are pre-filled — anything
+ *     disputed is left BLANK so it must be typed, not rubber-stamped.
+ *  2. The bill's QTY counts PACKS and its RATE is per PACK. We only pre-fill the
+ *     unit when the server proved which pack it is, and we use the converted
+ *     per-base-unit cost. If the pack couldn't be resolved we leave the unit
+ *     blank rather than silently defaulting to base units — that mistake booked
+ *     "1 ml" for a 60ml bottle.
  */
 function linesFromScan(bill: ScannedBill): DraftLine[] {
   return bill.lines.map((l) => {
@@ -76,17 +81,20 @@ function linesFromScan(bill: ScannedBill): DraftLine[] {
 
     const batch = trust(l.fields.batchNo);
     const qty = trust(l.fields.quantity);
-    const rate = trust(l.fields.rate);
     const expiryOk = l.fields.expiry.confidence === "high";
+    const rateOk = l.fields.rate.confidence === "high";
+    const unit = l.unitResolution?.resolved ? l.unitResolution.unit : null;
+    // Cost is only meaningful once the pack is known AND the rate was agreed.
+    const cost = unit && rateOk ? l.costPerBaseUnit : null;
 
     return {
       productId: l.match?.id || null,
       batchNumber: batch ? String(batch) : "",
       mfgDate: "",
       expiryDate: expiryOk ? isoToDate(l.expiryDate) : "",
-      unit: l.match?.baseUnit || null,
+      unit,
       quantity: qty != null ? String(qty) : "",
-      purchasePrice: rate != null ? String(rate) : "",
+      purchasePrice: cost != null ? String(cost) : "",
       locationId: null,
       flagged: l.needsReview || !l.match,
     };
@@ -112,6 +120,7 @@ export default function ReceiveStockScreen() {
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
   const [done, setDone] = useState<string | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   /**
    * Products the bill scanner matched. The scanner searches the whole catalogue
    * server-side, so it can return a product that isn't on the page we loaded —
@@ -140,10 +149,18 @@ export default function ReceiveStockScreen() {
     setScanProducts(matched);
     setLines(linesFromScan(scanned));
     setReference(scanned.invoiceNo || "");
+    // Auto-link the supplier when the server matched one confidently.
+    if (scanned.supplierMatch) setSupplierId(scanned.supplierMatch.id);
     setScanNote(
       flagged > 0
         ? `${scanned.stats.total} lines from ${from} — ${flagged} need a check (unclear values were left blank). Pick a storage location for each line.`
         : `${scanned.stats.total} lines from ${from} read cleanly. Pick a storage location for each line.`,
+    );
+    // A repeat invoice would double the stock — say so loudly, don't block.
+    setDuplicateWarning(
+      scanned.duplicate
+        ? `Invoice ${scanned.duplicate.referenceNo} was already received as ${scanned.duplicate.receiptNo} on ${new Date(scanned.duplicate.receivedAt).toLocaleDateString()}. Saving again will DOUBLE this stock.`
+        : null,
     );
     navigation.setParams({ scanned: undefined });
   }, [scanned, navigation]);
@@ -298,6 +315,23 @@ export default function ReceiveStockScreen() {
         </HStack>
       }
     >
+      {duplicateWarning && (
+        <View style={warnBox}>
+          <HStack gap={8} align="flex-start">
+            <AlertTriangle
+              size={16}
+              color={palette.warning.text}
+              strokeWidth={2.2}
+            />
+            <Text
+              variant="body-sm"
+              style={{ color: palette.warning.text, flex: 1 }}
+            >
+              {duplicateWarning}
+            </Text>
+          </HStack>
+        </View>
+      )}
       {scanNote && (
         <View style={infoBox}>
           <HStack gap={8} align="center">
@@ -554,5 +588,13 @@ const infoBox = {
   backgroundColor: palette.info.bg,
   borderWidth: 1,
   borderColor: palette.info.border,
+  marginBottom: 16,
+} as const;
+const warnBox = {
+  padding: 14,
+  borderRadius: radius.md,
+  backgroundColor: palette.warning.bg,
+  borderWidth: 1,
+  borderColor: palette.warning.border,
   marginBottom: 16,
 } as const;

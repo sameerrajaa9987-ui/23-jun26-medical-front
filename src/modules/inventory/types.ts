@@ -161,6 +161,18 @@ export interface OcrProductRef {
   score?: number;
 }
 
+/** How the bill's QTY unit maps onto the product's own units. */
+export interface UnitResolution {
+  /** false = we could not prove the unit; the pharmacist must pick it. */
+  resolved: boolean;
+  unit: string | null;
+  factor: number | null;
+  /** Why it couldn't be resolved (blocks the line). */
+  reason: string | null;
+  /** Advisory — resolved, but worth a second look (doesn't block). */
+  note: string | null;
+}
+
 export interface ScannedLine {
   productName: string | null;
   pack: string | null;
@@ -171,6 +183,12 @@ export interface ScannedLine {
   mrp: number | null;
   rate: number | null;
   gstPct: number | null;
+  /** The bill's QTY counts PACKS — this says which pack unit that is. */
+  unitResolution: UnitResolution;
+  /** Bill RATE is per pack; this is the per-base-unit cost (null if unresolved). */
+  costPerBaseUnit: number | null;
+  /** Free goods on the bill — physically arrive, so the human decides. */
+  freeQty: number;
   fields: {
     batchNo: OcrField<string | null>;
     expiry: OcrField<string | null>;
@@ -192,9 +210,18 @@ export interface ScannedLine {
 
 export interface ScannedBill {
   supplierName: string | null;
+  /** Existing supplier this bill confidently came from, if any. */
+  supplierMatch: { id: string; name: string; score: number } | null;
   invoiceNo: string | null;
   invoiceDate: string | null;
   rotation: number;
+  /** Set when this invoice number was already received — re-saving doubles stock. */
+  duplicate: {
+    receiptNo: string;
+    referenceNo: string;
+    receivedAt: string;
+    supplierName: string;
+  } | null;
   lines: ScannedLine[];
   stats: {
     total: number;
