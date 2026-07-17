@@ -20,6 +20,7 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { PERMISSIONS } from "@shared/permissions";
+import { useAuthStore } from "@shared/store/useAuthStore";
 
 export interface NavItem {
   name: string;
@@ -127,3 +128,21 @@ export const NAV_ITEMS: NavItem[] = [
   { name: "Reminders", label: "Reminders", icon: BellRing },
   { name: "Profile", label: "Profile", icon: UserRound },
 ];
+
+/**
+ * The nav items this user may actually use.
+ *
+ * Single source of truth for both the Sidebar (what to draw) and the navigator
+ * (which routes to register) — if they disagreed, a user could reach a section
+ * the sidebar refuses to show. Server-side permission checks remain the real
+ * guard; this just keeps the UI honest.
+ */
+export function useVisibleNavItems(): NavItem[] {
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const isAdmin = useAuthStore((s) => s.isAdmin);
+  return NAV_ITEMS.filter((it) => {
+    if (it.adminOnly) return isAdmin();
+    if (it.permission) return hasPermission(it.permission);
+    return true;
+  });
+}

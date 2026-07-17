@@ -10,7 +10,7 @@ import {
 import { useAuthStore } from "@shared/store/useAuthStore";
 import { palette, radius, layout } from "@shared/designSystem";
 import { Text, VStack, HStack, Avatar } from "@shared/ui";
-import { NAV_ITEMS, NavItem } from "./navItems";
+import { NavItem, useVisibleNavItems } from "./navItems";
 
 interface Props {
   activeRoute: string;
@@ -30,15 +30,9 @@ export function Sidebar({
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const organization = useAuthStore((s) => s.organization);
-  const hasPermission = useAuthStore((s) => s.hasPermission);
-  const isAdmin = useAuthStore((s) => s.isAdmin);
   const logout = useAuthStore((s) => s.logout);
-
-  const items = NAV_ITEMS.filter((it) => {
-    if (it.adminOnly) return isAdmin();
-    if (it.permission) return hasPermission(it.permission);
-    return true;
-  });
+  // Same list the navigator registers routes from — one source of truth.
+  const items = useVisibleNavItems();
 
   return (
     <View

@@ -26,6 +26,17 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * URL <-> route mapping.
+ *
+ * This is the half that makes the web build behave like a web app: the address
+ * bar follows the section, a refresh restores it, and back/forward work. It only
+ * does anything because the sections are real drawer routes — a linking config
+ * over a hand-rolled `useState` switch (as this app had) is decoration.
+ *
+ * Every section is listed: an unmapped route silently falls back to the initial
+ * one on reload, which is the bug this replaces.
+ */
 const linking = {
   prefixes: [],
   config: {
@@ -41,9 +52,63 @@ const linking = {
       App: {
         screens: {
           Dashboard: "dashboard",
-          Team: "team",
+          Warehouse: "warehouse",
+          Transfers: "transfers",
+          Expiry: "expiry",
+          Damaged: "damaged",
+          Search: "search",
+          Reports: "reports",
+          AuditLog: "audit-logs",
           Settings: "settings",
+          Reminders: "reminders",
           Profile: "profile",
+
+          // Sections that host a nested stack must map their children too.
+          // Otherwise the stack appends its route name (/inventory/InventoryList),
+          // that path matches nothing on reload, and you land back on Dashboard —
+          // which is exactly the bug this config exists to kill. The index screen
+          // maps to "" so the section keeps a clean URL.
+          Products: {
+            path: "products",
+            screens: { ProductsList: "", ProductForm: "edit/:id?" },
+          },
+          Inventory: {
+            path: "inventory",
+            screens: { InventoryList: "" },
+          },
+          Receive: {
+            path: "receive-stock",
+            screens: {
+              ReceiveStock: "",
+              Receipts: "history",
+              ReceiptDetail: "history/:id",
+              ScanBill: "scan",
+            },
+          },
+          Sales: {
+            path: "sales",
+            screens: { SalesList: "", NewSale: "new", SaleDetail: ":id" },
+          },
+          Customers: {
+            path: "customers",
+            screens: {
+              CustomersList: "",
+              CustomerForm: "edit/:id?",
+              CustomerDetail: ":id",
+            },
+          },
+          Suppliers: {
+            path: "suppliers",
+            screens: {
+              SuppliersList: "",
+              SupplierForm: "edit/:id?",
+              SupplierDetail: ":id",
+            },
+          },
+          Team: {
+            path: "team",
+            screens: { TeamList: "", AddUser: "add", UserDetail: ":id" },
+          },
         },
       },
     },
