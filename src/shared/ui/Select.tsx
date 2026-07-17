@@ -39,6 +39,16 @@ interface Props {
   loading?: boolean;
   /** Label shown for the currently-selected value if it isn't in `options`. */
   selectedLabel?: string;
+  /**
+   * Offers to create the thing being searched for, handing back what was typed.
+   *
+   * Unlike `onCreate` — which makes something from a name alone — this just
+   * closes the list and lets the caller ask for whatever else it needs. Use it
+   * when a name isn't enough to create a usable record.
+   */
+  onRequestCreate?: (query: string) => void;
+  /** Noun for the create row, e.g. "product" -> `Add "X" as a new product`. */
+  createNoun?: string;
 }
 
 // Never render more than this at once: a 100k-option list would lock the UI.
@@ -58,6 +68,8 @@ export function Select({
   onSearch,
   loading,
   selectedLabel,
+  onRequestCreate,
+  createNoun = "item",
 }: Props) {
   const [open, setOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
@@ -209,6 +221,34 @@ export function Select({
                   +{hidden} more — keep typing to narrow it down.
                 </Text>
               )}
+
+              {/* Sits at the end of the results, which is where you look once
+                  nothing in them is what you wanted. */}
+              {onRequestCreate && !loading && (
+                <Pressable
+                  onPress={() => {
+                    const q = query.trim();
+                    close();
+                    onRequestCreate(q);
+                  }}
+                  accessibilityLabel={`Add a new ${createNoun}`}
+                  style={({ pressed }) => [
+                    styles.requestCreate,
+                    pressed && { backgroundColor: palette.teal[100] },
+                  ]}
+                >
+                  <Plus size={16} color={palette.teal[700]} strokeWidth={2.4} />
+                  <Text
+                    variant="label"
+                    style={{ color: palette.teal[700], flex: 1 }}
+                    numberOfLines={1}
+                  >
+                    {query.trim()
+                      ? `Add "${query.trim()}" as a new ${createNoun}`
+                      : `Add a new ${createNoun}`}
+                  </Text>
+                </Pressable>
+              )}
             </ScrollView>
 
             {onCreate && (
@@ -279,6 +319,17 @@ const styles = StyleSheet.create({
     borderWidth: outline.width,
     borderColor: outline.color,
     backgroundColor: palette.surface.primary,
+  },
+  requestCreate: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 4,
+    backgroundColor: palette.teal[50],
+    borderTopWidth: 1,
+    borderTopColor: palette.border.subtle,
   },
   backdrop: {
     flex: 1,

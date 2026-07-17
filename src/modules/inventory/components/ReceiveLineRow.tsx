@@ -5,6 +5,7 @@ import { DraftLine, ProductLite } from "@modules/inventory/types";
 import {
   baseQty,
   lineStatus,
+  lineTitle,
   summaryLine,
   unitOptions,
   LineTone,
@@ -25,6 +26,8 @@ interface Props {
   onSearchProducts: (q: string) => void;
   productsLoading?: boolean;
   locationOptions: { value: string; label: string }[];
+  /** Offer to create the product from here. Omitted without `products.manage`. */
+  onRequestCreateProduct?: (query: string) => void;
 }
 
 /**
@@ -47,8 +50,10 @@ export function ReceiveLineRow({
   onSearchProducts,
   productsLoading,
   locationOptions,
+  onRequestCreateProduct,
 }: Props) {
   const status = lineStatus(line);
+  const title = lineTitle(line, product);
   const Chevron = open ? ChevronDown : ChevronRight;
   // Three fields across only where they'd still be readable; a phone stacks them.
   const { width } = useWindowDimensions();
@@ -64,7 +69,11 @@ export function ReceiveLineRow({
             tone={product ? "primary" : "tertiary"}
             numberOfLines={1}
           >
-            {index + 1}. {product ? product.name : "Choose a product"}
+            {index + 1}. {title.text}
+            {/* Naming the bill's wording without implying we linked it. */}
+            {!title.matched && title.text !== "Choose a product"
+              ? "  (on bill)"
+              : ""}
           </Text>
           <Text variant="caption" tone="tertiary" numberOfLines={1}>
             {summaryLine(line, product)}
@@ -96,7 +105,19 @@ export function ReceiveLineRow({
             onSearch={onSearchProducts}
             loading={productsLoading}
             onChange={onPickProduct}
+            onRequestCreate={onRequestCreateProduct}
+            createNoun="product"
           />
+
+          {/* An unmatched scanned line: say what the bill called it, since the
+              picker's search box starts empty and the name is the only clue. */}
+          {!product && line.fromBill?.productName && (
+            <Text variant="caption" tone="warning">
+              Bill says &ldquo;{line.fromBill.productName}
+              {line.fromBill.pack ? ` · ${line.fromBill.pack}` : ""}&rdquo; —
+              search for it above, or add it as a new product.
+            </Text>
+          )}
 
           {/* Batch · Qty · Unit — quantity and its unit are one thought ("5 pcs"),
               so they sit together instead of Unit hogging a whole row. */}

@@ -8,7 +8,10 @@ import {
   ScanLine,
   AlertTriangle,
 } from "lucide-react-native";
-import { useProducts } from "@modules/product/hooks/useProducts";
+import {
+  useProducts,
+  useCreateProduct,
+} from "@modules/product/hooks/useProducts";
 import { useAllLocations } from "@modules/warehouse/hooks/useWarehouse";
 import {
   useSuppliers,
@@ -16,6 +19,13 @@ import {
 } from "@modules/supplier/hooks/useSuppliers";
 import { useReceiveStock } from "@modules/inventory/hooks/useInventory";
 import { ReceiveLineRow } from "@modules/inventory/components/ReceiveLineRow";
+import { QuickAddProduct } from "@modules/inventory/components/QuickAddProduct";
+import {
+  NewProductDraft,
+  draftFromLine,
+  toCreatePayload,
+  toProductLite,
+} from "@modules/inventory/productFromBill";
 import { DraftLine, ProductLite, ScannedBill } from "@modules/inventory/types";
 import {
   emptyLine,
@@ -62,8 +72,12 @@ export default function ReceiveStockScreen() {
   const canManageSuppliers = useAuthStore((s) => s.hasPermission)(
     "suppliers.manage",
   );
+  const canManageProducts = useAuthStore((s) => s.hasPermission)(
+    "products.manage",
+  );
   const { data: suppliers } = useSuppliers();
   const createSupplier = useCreateSupplier();
+  const createProduct = useCreateProduct();
   const mut = useReceiveStock();
 
   const [supplierId, setSupplierId] = useState<string | null>(null);
@@ -77,6 +91,12 @@ export default function ReceiveStockScreen() {
   >({});
   /** Open rows. Collapsed by default so a 25-line bill fits on one screen. */
   const [expanded, setExpanded] = useState<Set<number>>(new Set([0]));
+  /** Which line asked to create a product, and what it should open with. */
+  const [creatingFor, setCreatingFor] = useState<{
+    index: number;
+    initial: NewProductDraft;
+    fromBill: boolean;
+  } | null>(null);
 
   const toggleExpanded = (i: number) =>
     setExpanded((cur) => {
@@ -152,6 +172,34 @@ export default function ReceiveStockScreen() {
     const p = id ? productsById[id] : null;
     if (p) setKnownProducts((cur) => ({ ...cur, [p.id]: p }));
     setLine(i, { productId: id, unit: p?.baseUnit || null });
+  };
+
+  /**
+   * The picker had nothing — open the create form for this line.
+   *
+   * `query` is whatever was typed, so a hand-added line still starts with a
+   * name; a scanned line prefers the bill's own wording and pack.
+   */
+  const requestCreateProduct = (i: number, query: string) => {
+    setCreatingFor({
+      index: i,
+      initial: draftFromLine(lines[i], query),
+      fromBill: Boolean(lines[i].fromBill?.productName),
+    });
+  };
+
+  /** Create it, then put it straight on the line that was missing it. */
+  const saveNewProduct = (draft: NewProductDraft) => {
+    if (!creatingFor) return;
+    const { index } = creatingFor;
+    createProduct.mutate(toCreatePayload(draft), {
+      onSuccess: (created) => {
+        const lite = toProductLite(created);
+        setKnownProducts((cur) => ({ ...cur, [lite.id]: lite }));
+        setLine(index, { productId: lite.id, unit: lite.baseUnit });
+        setCreatingFor(null);
+      },
+    });
   };
 
   // A manually-added line is the one you want to fill in next.
@@ -311,6 +359,9 @@ export default function ReceiveStockScreen() {
             onSearchProducts={setProductQuery}
             productsLoading={productsLoading}
             locationOptions={locationOptions}
+            onRequestCreateProduct={
+              canManageProducts ? (q) => requestCreateProduct(i, q) : undefined
+            }
           />
         ))}
       </VStack>
@@ -340,6 +391,25 @@ export default function ReceiveStockScreen() {
         disabled={!validLines.length}
         onPress={submit}
       />
+
+      {/* Keyed by line so each open starts from that line's bill data. */}
+      {creatingFor && (
+        <QuickAddProduct
+          key={creatingFor.index}
+          visible
+          initial={creatingFor.initial}
+          fromBill={creatingFor.fromBill}
+          saving={createProduct.isPending}
+          error={
+            createProduct.isError ? apiErrorMessage(createProduct.error) : null
+          }
+          onCancel={() => {
+            createProduct.reset();
+            setCreatingFor(null);
+          }}
+          onSave={saveNewProduct}
+        />
+      )}
     </Screen>
   );
 }

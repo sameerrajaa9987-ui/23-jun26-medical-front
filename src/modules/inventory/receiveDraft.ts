@@ -78,6 +78,23 @@ export function lineStatus(line: DraftLine): { label: string; tone: LineTone } {
   return { label: "Ready", tone: "ok" };
 }
 
+/**
+ * What to call this row.
+ *
+ * A matched product wins. Failing that the bill's own wording is far better
+ * than "Choose a product": it's how the pharmacist finds the line on the paper
+ * in front of them. Only a hand-added row has genuinely no name yet.
+ */
+export function lineTitle(
+  line: DraftLine,
+  product?: ProductLite | null,
+): { text: string; matched: boolean } {
+  if (product) return { text: product.name, matched: true };
+  const billName = line.fromBill?.productName?.trim();
+  if (billName) return { text: billName, matched: false };
+  return { text: "Choose a product", matched: false };
+}
+
 /** One-line gist of a row while it's collapsed. */
 export function summaryLine(line: DraftLine, product?: ProductLite | null) {
   const bits: string[] = [
@@ -124,6 +141,15 @@ export function linesFromScan(bill: ScannedBill): DraftLine[] {
       purchasePrice: cost != null ? String(cost) : "",
       locationId: null,
       flagged: l.needsReview || !l.match,
+      // Kept regardless of whether we matched: it names the row for a human,
+      // and it's what fills the form if this product has to be created.
+      fromBill: {
+        productName: l.productName,
+        pack: l.pack,
+        hsn: l.hsn,
+        mrp: l.mrp,
+        gstPct: l.gstPct,
+      },
     };
   });
 }

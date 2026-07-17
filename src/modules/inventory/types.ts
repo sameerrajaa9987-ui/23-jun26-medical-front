@@ -84,6 +84,21 @@ export interface ProductLite {
 }
 
 /** One in-progress goods-received line as held by the form. */
+/**
+ * What the bill printed for this line, kept even when nothing matched.
+ *
+ * Without it an unmatched row can only say "Choose a product" next to a batch
+ * number — useless unless the paper bill is still in your hand. It's also
+ * exactly what's needed to create the product, so it's evidence, not clutter.
+ */
+export interface BillHint {
+  productName: string | null;
+  pack: string | null;
+  hsn: string | null;
+  mrp: number | null;
+  gstPct: number | null;
+}
+
 export interface DraftLine {
   productId: string | null;
   batchNumber: string;
@@ -95,6 +110,8 @@ export interface DraftLine {
   locationId: string | null;
   /** Came from a scanned bill and needs a human look before saving. */
   flagged?: boolean;
+  /** What the bill said, for identifying and creating an unmatched product. */
+  fromBill?: BillHint;
 }
 
 export interface ReceivePayload {
@@ -199,6 +216,7 @@ export interface UnitResolution {
 export interface ScannedLine {
   productName: string | null;
   pack: string | null;
+  hsn: string | null;
   batchNo: string | null;
   expiry: string | null;
   expiryDate: string | null;
