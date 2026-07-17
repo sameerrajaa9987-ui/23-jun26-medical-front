@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { View, Image, ActivityIndicator, Pressable } from "react-native";
+import {
+  View,
+  Image,
+  ActivityIndicator,
+  Pressable,
+  Modal,
+  useWindowDimensions,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useMutation } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
@@ -14,6 +21,8 @@ import {
   ArrowRight,
   RotateCcw,
   RotateCw,
+  Maximize2,
+  X,
 } from "lucide-react-native";
 import { ocrApi, ScanFile } from "@modules/inventory/api/ocrApi";
 import {
@@ -56,7 +65,12 @@ export default function ScanBillScreen() {
   const [rotation, setRotation] = useState<Rotation>(0);
   const [turning, setTurning] = useState(false);
   const [prepError, setPrepError] = useState<string | null>(null);
+  const [zoomed, setZoomed] = useState(false);
   const [bill, setBill] = useState<ScannedBill | null>(null);
+  // Judging orientation needs a big picture: a bill shrunk into a card is a grey
+  // smudge, and asking someone to confirm what they can't read is theatre.
+  const { width } = useWindowDimensions();
+  const previewHeight = width >= 900 ? 440 : 260;
 
   const scan = useMutation({
     mutationFn: ({
@@ -235,16 +249,27 @@ export default function ScanBillScreen() {
       {preview && !scan.isPending && !bill && (
         <Card style={{ marginBottom: 16 }}>
           <VStack gap={12}>
-            <Image
-              source={{ uri: preview }}
-              style={{
-                width: "100%",
-                height: 240,
-                borderRadius: radius.lg,
-                backgroundColor: palette.ink[100],
-              }}
-              resizeMode="contain"
-            />
+            <Pressable
+              onPress={() => setZoomed(true)}
+              accessibilityLabel="Enlarge bill preview"
+            >
+              <Image
+                source={{ uri: preview }}
+                style={{
+                  width: "100%",
+                  height: previewHeight,
+                  borderRadius: radius.lg,
+                  backgroundColor: palette.ink[100],
+                }}
+                resizeMode="contain"
+              />
+              <View style={zoomHint}>
+                <Maximize2 size={13} color="#FFFFFF" strokeWidth={2.2} />
+                <Text variant="label-sm" style={{ color: "#FFFFFF" }}>
+                  Tap to enlarge
+                </Text>
+              </View>
+            </Pressable>
             <HStack gap={10} align="center" wrap>
               <TurnButton
                 label="Rotate left"
@@ -271,9 +296,13 @@ export default function ScanBillScreen() {
                 }
               />
               {turning && <ActivityIndicator color={palette.teal[600]} />}
-              <View style={{ flex: 1, minWidth: 140 }}>
+              <View style={{ flex: 1, minWidth: 160 }}>
+                {/* Sideways is the rotation that actually breaks a read; a bill
+                    that's merely upside-down reads fine, so don't send anyone
+                    hunting for a flip they don't need. */}
                 <Text variant="caption" tone="tertiary">
-                  Turn it until the product names read left-to-right.
+                  The bill should lie flat and wide, like the paper does. Enlarge
+                  it if you&apos;re not sure — a sideways bill reads badly.
                 </Text>
               </View>
               <Button
@@ -372,6 +401,61 @@ export default function ScanBillScreen() {
           </Text>
         </>
       )}
+
+      {/* Full-screen look at the page, with the turn controls still to hand so
+          a wrong orientation is fixed where it's actually visible. */}
+      <Modal
+        visible={zoomed && Boolean(preview)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setZoomed(false)}
+      >
+        <View style={zoomBackdrop}>
+          <Pressable
+            onPress={() => setZoomed(false)}
+            style={zoomClose}
+            accessibilityLabel="Close preview"
+          >
+            <X size={22} color="#FFFFFF" strokeWidth={2.2} />
+          </Pressable>
+          {preview && (
+            <Image
+              source={{ uri: preview }}
+              style={{ flex: 1, width: "100%" }}
+              resizeMode="contain"
+            />
+          )}
+          <HStack gap={12} justify="center" style={{ paddingVertical: 18 }}>
+            {/* The button face is white, so the glyph must be dark — white on
+                white was invisible against the dimmed backdrop. */}
+            <TurnButton
+              label="Rotate left in preview"
+              onPress={() => rotate(-1)}
+              disabled={turning}
+              icon={
+                <RotateCcw
+                  size={18}
+                  color={palette.text.primary}
+                  strokeWidth={2}
+                />
+              }
+            />
+            <TurnButton
+              label="Rotate right in preview"
+              onPress={() => rotate(1)}
+              disabled={turning}
+              icon={
+                <RotateCw
+                  size={18}
+                  color={palette.text.primary}
+                  strokeWidth={2}
+                />
+              }
+            />
+            {turning && <ActivityIndicator color="#FFFFFF" />}
+          </HStack>
+        </View>
+      </Modal>
 
       {!bill && !scan.isPending && !preview && (
         <Card>
@@ -548,6 +632,37 @@ const turnBtn = {
   backgroundColor: palette.surface.primary,
   alignItems: "center",
   justifyContent: "center",
+} as const;
+const zoomHint = {
+  position: "absolute",
+  right: 10,
+  bottom: 10,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 5,
+  paddingHorizontal: 9,
+  paddingVertical: 5,
+  borderRadius: radius.full,
+  backgroundColor: "rgba(15,23,42,0.65)",
+} as const;
+const zoomBackdrop = {
+  flex: 1,
+  backgroundColor: "rgba(2,6,23,0.94)",
+  paddingTop: 54,
+  paddingHorizontal: 12,
+  paddingBottom: 8,
+} as const;
+const zoomClose = {
+  position: "absolute",
+  top: 14,
+  right: 14,
+  zIndex: 2,
+  width: 40,
+  height: 40,
+  borderRadius: radius.full,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "rgba(255,255,255,0.14)",
 } as const;
 const chip = {
   paddingHorizontal: 9,
