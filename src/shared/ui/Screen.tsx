@@ -5,6 +5,7 @@ import {
   RefreshControl,
   StyleProp,
   ViewStyle,
+  useWindowDimensions,
 } from "react-native";
 import { palette, layout } from "../designSystem";
 import { useBottomPadding } from "./useBottomPadding";
@@ -41,18 +42,22 @@ export function Screen({
   children,
 }: Props) {
   const bottom = useBottomPadding(32);
+  const { width } = useWindowDimensions();
+  // On a phone, actions sitting beside the title squeeze the subtitle into a
+  // ragged column — drop them onto their own line instead.
+  const stackHeader = width < 700;
 
   const header = (title || right) && (
     <View
       style={{
-        flexDirection: "row",
-        alignItems: "flex-end",
+        flexDirection: stackHeader ? "column" : "row",
+        alignItems: stackHeader ? "stretch" : "flex-end",
         justifyContent: "space-between",
         marginBottom: 20,
         gap: 12,
       }}
     >
-      <VStack gap={3} flex={1}>
+      <VStack gap={3} flex={stackHeader ? undefined : 1}>
         {overline ? (
           <Text variant="overline" tone="accent">
             {overline}

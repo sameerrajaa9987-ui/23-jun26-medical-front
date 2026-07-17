@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Pressable, StyleSheet } from "react-native";
+import { View, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { X, ChevronDown, ChevronRight } from "lucide-react-native";
 import { DraftLine, ProductLite } from "@modules/inventory/types";
 import {
@@ -50,6 +50,9 @@ export function ReceiveLineRow({
 }: Props) {
   const status = lineStatus(line);
   const Chevron = open ? ChevronDown : ChevronRight;
+  // Three fields across only where they'd still be readable; a phone stacks them.
+  const { width } = useWindowDimensions();
+  const wide = width >= 820;
 
   return (
     <Card elevation="base" style={{ padding: 0 }}>
@@ -80,7 +83,8 @@ export function ReceiveLineRow({
       </Pressable>
 
       {open && (
-        <VStack gap={14} style={styles.body}>
+        <VStack gap={10} style={styles.body}>
+          {/* Product gets its own row — names are long and it's the key field. */}
           <Select
             label="Product"
             placeholder="Search by name or SKU…"
@@ -94,8 +98,10 @@ export function ReceiveLineRow({
             onChange={onPickProduct}
           />
 
-          <HStack gap={12}>
-            <View style={{ flex: 1.2 }}>
+          {/* Batch · Qty · Unit — quantity and its unit are one thought ("5 pcs"),
+              so they sit together instead of Unit hogging a whole row. */}
+          <HStack gap={10}>
+            <View style={{ flex: 1.5 }}>
               <TextField
                 label="Batch no."
                 value={line.batchNumber}
@@ -103,66 +109,97 @@ export function ReceiveLineRow({
                 placeholder="B-001"
               />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 0.8 }}>
               <TextField
-                label="Quantity"
+                label="Qty"
                 value={line.quantity}
                 onChangeText={(v) => onChange({ quantity: v })}
                 keyboardType="decimal-pad"
                 placeholder="0"
               />
             </View>
+            <View style={{ flex: 1.1 }}>
+              <Select
+                label="Unit"
+                placeholder="Unit"
+                value={line.unit}
+                options={unitOptions(product)}
+                onChange={(v) => onChange({ unit: v })}
+              />
+            </View>
           </HStack>
 
-          <Select
-            label="Unit"
-            placeholder="Unit"
-            value={line.unit}
-            options={unitOptions(product)}
-            onChange={(v) => onChange({ unit: v })}
-          />
-
-          <HStack gap={12}>
-            <View style={{ flex: 1 }}>
+          {/* Dates + cost. Three across on desktop, two rows on a phone. */}
+          {wide ? (
+            <HStack gap={10}>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label="Expiry date"
+                  value={line.expiryDate}
+                  onChangeText={(v) => onChange({ expiryDate: v })}
+                  placeholder="YYYY-MM-DD"
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label="Mfg date"
+                  value={line.mfgDate}
+                  onChangeText={(v) => onChange({ mfgDate: v })}
+                  placeholder="optional"
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label="Cost / base (₹)"
+                  value={line.purchasePrice}
+                  onChangeText={(v) => onChange({ purchasePrice: v })}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                />
+              </View>
+            </HStack>
+          ) : (
+            <>
+              <HStack gap={10}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label="Expiry date"
+                    value={line.expiryDate}
+                    onChangeText={(v) => onChange({ expiryDate: v })}
+                    placeholder="YYYY-MM-DD"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label="Cost / base (₹)"
+                    value={line.purchasePrice}
+                    onChangeText={(v) => onChange({ purchasePrice: v })}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                  />
+                </View>
+              </HStack>
               <TextField
-                label="Mfg date"
+                label="Mfg date (optional)"
                 value={line.mfgDate}
                 onChangeText={(v) => onChange({ mfgDate: v })}
                 placeholder="YYYY-MM-DD"
                 autoCapitalize="none"
               />
-            </View>
-            <View style={{ flex: 1 }}>
-              <TextField
-                label="Expiry date"
-                value={line.expiryDate}
-                onChangeText={(v) => onChange({ expiryDate: v })}
-                placeholder="YYYY-MM-DD"
-                autoCapitalize="none"
-              />
-            </View>
-          </HStack>
+            </>
+          )}
 
-          <HStack gap={12}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                label="Cost / base unit (₹)"
-                value={line.purchasePrice}
-                onChangeText={(v) => onChange({ purchasePrice: v })}
-                keyboardType="decimal-pad"
-                placeholder="0.00"
-              />
-            </View>
-            <View style={{ flex: 1.4 }}>
-              <Select
-                label="Storage location"
-                placeholder="Where?"
-                value={line.locationId}
-                options={locationOptions}
-                onChange={(v) => onChange({ locationId: v })}
-              />
-            </View>
-          </HStack>
+          {/* Location keeps a full row — codes like "WH1-Z1-W1-S2 — Shelf 2" are long. */}
+          <Select
+            label="Storage location"
+            placeholder="Where?"
+            value={line.locationId}
+            options={locationOptions}
+            onChange={(v) => onChange({ locationId: v })}
+          />
 
           {product && Number(line.quantity) > 0 && (
             <Text variant="caption" tone="tertiary">
@@ -208,8 +245,8 @@ const styles = StyleSheet.create({
   },
   body: {
     paddingHorizontal: 14,
-    paddingBottom: 16,
-    paddingTop: 2,
+    paddingBottom: 14,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: palette.border.subtle,
   },
