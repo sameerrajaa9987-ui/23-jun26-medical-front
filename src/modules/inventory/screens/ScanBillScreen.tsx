@@ -301,8 +301,9 @@ export default function ScanBillScreen() {
                     that's merely upside-down reads fine, so don't send anyone
                     hunting for a flip they don't need. */}
                 <Text variant="caption" tone="tertiary">
-                  The bill should lie flat and wide, like the paper does. Enlarge
-                  it if you&apos;re not sure — a sideways bill reads badly.
+                  The bill should lie flat and wide, like the paper does.
+                  Enlarge it if you&apos;re not sure — a sideways bill reads
+                  badly.
                 </Text>
               </View>
               <Button

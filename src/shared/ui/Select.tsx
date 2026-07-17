@@ -221,35 +221,36 @@ export function Select({
                   +{hidden} more — keep typing to narrow it down.
                 </Text>
               )}
-
-              {/* Sits at the end of the results, which is where you look once
-                  nothing in them is what you wanted. */}
-              {onRequestCreate && !loading && (
-                <Pressable
-                  onPress={() => {
-                    const q = query.trim();
-                    close();
-                    onRequestCreate(q);
-                  }}
-                  accessibilityLabel={`Add a new ${createNoun}`}
-                  style={({ pressed }) => [
-                    styles.requestCreate,
-                    pressed && { backgroundColor: palette.teal[100] },
-                  ]}
-                >
-                  <Plus size={16} color={palette.teal[700]} strokeWidth={2.4} />
-                  <Text
-                    variant="label"
-                    style={{ color: palette.teal[700], flex: 1 }}
-                    numberOfLines={1}
-                  >
-                    {query.trim()
-                      ? `Add "${query.trim()}" as a new ${createNoun}`
-                      : `Add a new ${createNoun}`}
-                  </Text>
-                </Pressable>
-              )}
             </ScrollView>
+
+            {/* PINNED below the list, never inside it. A catalogue this size
+                renders up to a hundred rows, and an escape hatch you can only
+                reach by scrolling past all of them is not an escape hatch. */}
+            {onRequestCreate && (
+              <Pressable
+                onPress={() => {
+                  const q = query.trim();
+                  close();
+                  onRequestCreate(q);
+                }}
+                accessibilityLabel={`Add a new ${createNoun}`}
+                style={({ pressed }) => [
+                  styles.requestCreate,
+                  pressed && { backgroundColor: palette.teal[100] },
+                ]}
+              >
+                <Plus size={16} color={palette.teal[700]} strokeWidth={2.4} />
+                <Text
+                  variant="label"
+                  style={{ color: palette.teal[700], flex: 1 }}
+                  numberOfLines={1}
+                >
+                  {query.trim()
+                    ? `Add "${query.trim()}" as a new ${createNoun}`
+                    : `Add a new ${createNoun}`}
+                </Text>
+              </Pressable>
+            )}
 
             {onCreate && (
               <View style={styles.createRow}>
@@ -326,10 +327,9 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    marginTop: 4,
     backgroundColor: palette.teal[50],
     borderTopWidth: 1,
-    borderTopColor: palette.border.subtle,
+    borderTopColor: palette.border.default,
   },
   backdrop: {
     flex: 1,
