@@ -10,6 +10,7 @@ export interface Product {
   name: string;
   sku: string;
   barcode: string;
+  saltComposition: string;
   categoryId: string | null;
   categoryName: string;
   brandId: string | null;
@@ -34,6 +35,7 @@ export interface ProductListItem {
   name: string;
   sku: string;
   barcode: string;
+  saltComposition: string;
   categoryName: string;
   brandName: string;
   baseUnit: string;
@@ -52,6 +54,7 @@ export interface ProductPayload {
   name: string;
   sku?: string;
   barcode?: string;
+  saltComposition?: string;
   categoryId?: string | null;
   brandId?: string | null;
   description?: string;

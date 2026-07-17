@@ -80,9 +80,13 @@ export default function NewSaleScreen() {
   }, [products, knownProducts]);
 
   /** Pickers list search results only; the catalogue is far too big to list. */
+  // Show the salt too: a search for "pantoprazole" returns brand names, and the
+  // molecule is what tells you why each one matched.
   const productOptions = (products?.data || []).map((p) => ({
     value: p.id,
-    label: `${p.name} · ${money(p.sellingPrice)}/${p.baseUnit}`,
+    label: p.saltComposition
+      ? `${p.name} · ${money(p.sellingPrice)}/${p.baseUnit} — ${p.saltComposition}`
+      : `${p.name} · ${money(p.sellingPrice)}/${p.baseUnit}`,
   }));
   const customerOptions = (customers?.data || []).map((c) => ({
     value: c.id,

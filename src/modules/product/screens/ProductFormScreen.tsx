@@ -68,6 +68,7 @@ export default function ProductFormScreen() {
     name: "",
     sku: "",
     barcode: "",
+    saltComposition: "",
     categoryId: null as string | null,
     brandId: null as string | null,
     baseUnit: "pcs",
@@ -87,6 +88,7 @@ export default function ProductFormScreen() {
         name: product.name,
         sku: product.sku,
         barcode: product.barcode,
+        saltComposition: product.saltComposition || "",
         categoryId: product.categoryId,
         brandId: product.brandId,
         baseUnit: product.baseUnit,
@@ -111,6 +113,7 @@ export default function ProductFormScreen() {
       name: f.name.trim(),
       sku: f.sku.trim() || undefined,
       barcode: f.barcode.trim() || undefined,
+      saltComposition: f.saltComposition.trim() || undefined,
       categoryId: f.categoryId,
       brandId: f.brandId,
       baseUnit: f.baseUnit.trim() || "pcs",
@@ -191,6 +194,14 @@ export default function ProductFormScreen() {
               />
             </View>
           </HStack>
+          {/* Staff search by molecule as often as by brand ("something with
+              pantoprazole"), and substitutes are chosen on the salt. */}
+          <TextField
+            label="Salt / composition"
+            value={f.saltComposition}
+            onChangeText={set("saltComposition")}
+            placeholder="e.g. Paracetamol 500mg + Caffeine 30mg"
+          />
           <Select
             label="Category"
             value={f.categoryId}
