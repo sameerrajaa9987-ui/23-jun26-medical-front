@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Image, ActivityIndicator } from "react-native";
+import { View, Image, ActivityIndicator, Pressable } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useMutation } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
@@ -12,8 +12,16 @@ import {
   CheckCircle2,
   AlertTriangle,
   ArrowRight,
+  RotateCcw,
+  RotateCw,
 } from "lucide-react-native";
 import { ocrApi, ScanFile } from "@modules/inventory/api/ocrApi";
+import {
+  Rotation,
+  renderUpright,
+  suggestRotation,
+  turn,
+} from "@modules/inventory/billImage";
 import { ScannedBill, ScannedLine } from "@modules/inventory/types";
 import { apiErrorMessage } from "@api/apiClient";
 import { palette, radius } from "@shared/designSystem";
@@ -41,18 +49,62 @@ export default function ScanBillScreen() {
     navigate: (s: string, p?: object) => void;
     goBack: () => void;
   };
+  /** The image as picked. Kept so every turn renders from the original. */
+  const [original, setOriginal] = useState<string | null>(null);
+  /** What's on screen and what will be uploaded — the same bytes, always. */
   const [preview, setPreview] = useState<string | null>(null);
+  const [rotation, setRotation] = useState<Rotation>(0);
+  const [turning, setTurning] = useState(false);
+  const [prepError, setPrepError] = useState<string | null>(null);
   const [bill, setBill] = useState<ScannedBill | null>(null);
 
   const scan = useMutation({
-    mutationFn: (file: ScanFile) => ocrApi.scanPurchaseBill(file),
+    mutationFn: ({
+      file,
+      orientationConfirmed,
+    }: {
+      file: ScanFile;
+      orientationConfirmed: boolean;
+    }) => ocrApi.scanPurchaseBill(file, orientationConfirmed),
     onSuccess: setBill,
   });
 
-  const run = (file: ScanFile, previewUri: string | null) => {
+  const reset = () => {
     setBill(null);
-    setPreview(previewUri);
-    scan.mutate(file);
+    setPrepError(null);
+    scan.reset();
+  };
+
+  /** Show the picked photo the way we think it should sit, ready to correct. */
+  const stage = async (uri: string, width?: number, height?: number) => {
+    reset();
+    setOriginal(uri);
+    setPreview(null);
+    await bake(uri, suggestRotation(width, height));
+  };
+
+  /** Render `uri` at `rot` and show it. The preview IS the upload. */
+  const bake = async (uri: string, rot: Rotation) => {
+    setTurning(true);
+    setPrepError(null);
+    try {
+      setPreview(await renderUpright(uri, rot));
+      setRotation(rot);
+    } catch {
+      // Without a rendered image we can't honestly claim the orientation was
+      // checked, so don't silently fall back to uploading the raw file.
+      setPreview(null);
+      setPrepError(
+        "Could not open that image. Try another photo, or upload the bill as a PDF.",
+      );
+    } finally {
+      setTurning(false);
+    }
+  };
+
+  const rotate = (dir: 1 | -1) => {
+    if (!original) return;
+    void bake(original, turn(rotation, dir));
   };
 
   const takePhoto = async () => {
@@ -61,28 +113,14 @@ export default function ScanBillScreen() {
     const r = await ImagePicker.launchCameraAsync({ quality: 0.9 });
     if (r.canceled || !r.assets?.[0]) return;
     const a = r.assets[0];
-    run(
-      {
-        uri: a.uri,
-        name: a.fileName || "bill.jpg",
-        mimeType: a.mimeType || "image/jpeg",
-      },
-      a.uri,
-    );
+    void stage(a.uri, a.width, a.height);
   };
 
   const pickImage = async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.9 });
     if (r.canceled || !r.assets?.[0]) return;
     const a = r.assets[0];
-    run(
-      {
-        uri: a.uri,
-        name: a.fileName || "bill.jpg",
-        mimeType: a.mimeType || "image/jpeg",
-      },
-      a.uri,
-    );
+    void stage(a.uri, a.width, a.height);
   };
 
   const pickPdf = async () => {
@@ -92,10 +130,39 @@ export default function ScanBillScreen() {
     });
     if (r.canceled || !r.assets?.[0]) return;
     const a = r.assets[0];
-    run(
-      { uri: a.uri, name: a.name, mimeType: a.mimeType || "application/pdf" },
-      a.mimeType?.startsWith("image/") ? a.uri : null,
-    );
+
+    // An image picked as a file still needs squaring up; a PDF is already
+    // upright and digital, so it goes straight through. The file picker doesn't
+    // report dimensions, so there's no opening guess here — the preview starts
+    // as-is and the pharmacist turns it.
+    if (a.mimeType?.startsWith("image/")) {
+      void stage(a.uri);
+      return;
+    }
+    reset();
+    setOriginal(null);
+    setPreview(null);
+    scan.mutate({
+      file: {
+        uri: a.uri,
+        name: a.name,
+        mimeType: a.mimeType || "application/pdf",
+      },
+      orientationConfirmed: false,
+    });
+  };
+
+  /**
+   * Send the reviewed pixels. `orientationConfirmed` is only ever true here:
+   * this is the one code path where a human has actually looked at the page.
+   */
+  const scanNow = () => {
+    if (!preview) return;
+    setBill(null);
+    scan.mutate({
+      file: { uri: preview, name: "bill.jpg", mimeType: "image/jpeg" },
+      orientationConfirmed: true,
+    });
   };
 
   /** Hands the draft to Receive Stock, which pre-fills its form. */
@@ -148,24 +215,77 @@ export default function ScanBillScreen() {
             />
           </HStack>
           <Text variant="caption" tone="tertiary">
-            Lay the bill flat in good light. Sideways photos are fine — we
-            detect the rotation.
+            Lay the bill flat in good light. Sideways photos are fine — you turn
+            it the right way up on the next step.
           </Text>
         </VStack>
       </Card>
 
-      {preview && (
-        <Image
-          source={{ uri: preview }}
-          style={{
-            width: "100%",
-            height: 170,
-            borderRadius: radius.lg,
-            marginBottom: 16,
-            backgroundColor: palette.ink[100],
-          }}
-          resizeMode="cover"
-        />
+      {prepError && (
+        <View style={errBox}>
+          <Text variant="body-sm" tone="danger">
+            {prepError}
+          </Text>
+        </View>
+      )}
+
+      {/* Square the page up before reading it. The pharmacist does this in a
+          glance; the server would need an extra OCR call to guess it, and would
+          have to finish guessing before it could start reading. */}
+      {preview && !scan.isPending && !bill && (
+        <Card style={{ marginBottom: 16 }}>
+          <VStack gap={12}>
+            <Image
+              source={{ uri: preview }}
+              style={{
+                width: "100%",
+                height: 240,
+                borderRadius: radius.lg,
+                backgroundColor: palette.ink[100],
+              }}
+              resizeMode="contain"
+            />
+            <HStack gap={10} align="center" wrap>
+              <TurnButton
+                label="Rotate left"
+                onPress={() => rotate(-1)}
+                disabled={turning}
+                icon={
+                  <RotateCcw
+                    size={18}
+                    color={palette.text.primary}
+                    strokeWidth={2}
+                  />
+                }
+              />
+              <TurnButton
+                label="Rotate right"
+                onPress={() => rotate(1)}
+                disabled={turning}
+                icon={
+                  <RotateCw
+                    size={18}
+                    color={palette.text.primary}
+                    strokeWidth={2}
+                  />
+                }
+              />
+              {turning && <ActivityIndicator color={palette.teal[600]} />}
+              <View style={{ flex: 1, minWidth: 140 }}>
+                <Text variant="caption" tone="tertiary">
+                  Turn it until the product names read left-to-right.
+                </Text>
+              </View>
+              <Button
+                label="Scan bill"
+                fullWidth={false}
+                disabled={turning}
+                onPress={scanNow}
+                icon={<ScanLine size={17} color="#FFFFFF" strokeWidth={2} />}
+              />
+            </HStack>
+          </VStack>
+        </Card>
       )}
 
       {scan.isPending && (
@@ -178,7 +298,7 @@ export default function ScanBillScreen() {
               </Text>
               <Text variant="caption" tone="tertiary">
                 Two independent passes to cross-check every batch and expiry.
-                Takes ~10–25 seconds.
+                Usually under 10 seconds.
               </Text>
             </VStack>
           </HStack>
@@ -268,6 +388,34 @@ export default function ScanBillScreen() {
         </Card>
       )}
     </Screen>
+  );
+}
+
+/** Square icon button for the quarter-turn controls. */
+function TurnButton({
+  label,
+  icon,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        turnBtn,
+        pressed && { backgroundColor: palette.ink[100] },
+        disabled && { opacity: 0.5 },
+      ]}
+    >
+      {icon}
+    </Pressable>
   );
 }
 
@@ -391,6 +539,16 @@ function FieldChip({
   );
 }
 
+const turnBtn = {
+  width: 42,
+  height: 42,
+  borderRadius: radius.md,
+  borderWidth: 1,
+  borderColor: palette.border.default,
+  backgroundColor: palette.surface.primary,
+  alignItems: "center",
+  justifyContent: "center",
+} as const;
 const chip = {
   paddingHorizontal: 9,
   paddingVertical: 4,

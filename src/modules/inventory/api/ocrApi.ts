@@ -11,8 +11,17 @@ export const ocrApi = {
   /**
    * Uploads a bill photo/PDF and returns a confidence-scored DRAFT.
    * Nothing is saved server-side — the pharmacist confirms on Receive Stock.
+   *
+   * `orientationConfirmed` says a human has already turned the page the right
+   * way up, so the server can skip guessing the rotation. That's worth a lot
+   * more than it sounds: it drops a Gemini call AND lets the two cross-check
+   * reads run at once instead of queueing (~22s -> ~7s). Only pass it when the
+   * pixels really were reviewed — a false claim here buys speed with accuracy.
    */
-  scanPurchaseBill: async (file: ScanFile): Promise<ScannedBill> => {
+  scanPurchaseBill: async (
+    file: ScanFile,
+    orientationConfirmed = false,
+  ): Promise<ScannedBill> => {
     const form = new FormData();
 
     if (file.uri.startsWith("data:") || file.uri.startsWith("blob:")) {
@@ -27,6 +36,8 @@ export const ocrApi = {
         type: file.mimeType,
       } as unknown as Blob);
     }
+
+    if (orientationConfirmed) form.append("orientationConfirmed", "true");
 
     const res = await apiClient.post<{ success: boolean; data: ScannedBill }>(
       "/ocr/purchase-bill",
