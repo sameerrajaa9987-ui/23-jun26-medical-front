@@ -44,8 +44,18 @@ const money = (n: number) =>
 
 export default function NewSaleScreen() {
   const navigation = useNavigation<any>();
-  const { data: products } = useProducts();
-  const { data: customers } = useCustomers();
+  // Catalogue and customer list are both paged — the pickers search server-side
+  // and we cache what's been resolved. Without the cache a product outside the
+  // current results loses its price and the line total silently computes to ₹0.
+  const [productQuery, setProductQuery] = useState("");
+  const { data: products, isFetching: productsLoading } = useProducts({
+    search: productQuery || undefined,
+    limit: 50,
+  });
+  const [customerQuery, setCustomerQuery] = useState("");
+  const { data: customers, isFetching: customersLoading } = useCustomers({
+    search: customerQuery || undefined,
+  });
   const createCustomer = useCreateCustomer();
   const mut = useCreateSale();
 
@@ -53,11 +63,23 @@ export default function NewSaleScreen() {
   const [taxType, setTaxType] = useState<"intra" | "inter">("intra");
   const [paymentMode, setPaymentMode] = useState("cash");
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
+  type ProductRow = NonNullable<typeof products>["data"][number];
+  type CustomerRow = NonNullable<typeof customers>["data"][number];
+  const [knownProducts, setKnownProducts] = useState<
+    Record<string, ProductRow>
+  >({});
+  const [knownCustomers, setKnownCustomers] = useState<
+    Record<string, CustomerRow>
+  >({});
 
-  const productsById = useMemo(
-    () => Object.fromEntries((products?.data || []).map((p) => [p.id, p])),
-    [products],
-  );
+  /** Cache + live results — this is what the pricing maths reads from. */
+  const productsById = useMemo(() => {
+    const map: Record<string, ProductRow> = { ...knownProducts };
+    for (const p of products?.data || []) map[p.id] = p;
+    return map;
+  }, [products, knownProducts]);
+
+  /** Pickers list search results only; the catalogue is far too big to list. */
   const productOptions = (products?.data || []).map((p) => ({
     value: p.id,
     label: `${p.name} · ${money(p.sellingPrice)}/${p.baseUnit}`,
@@ -66,6 +88,18 @@ export default function NewSaleScreen() {
     value: c.id,
     label: c.mobile ? `${c.name} · ${c.mobile}` : c.name,
   }));
+
+  const selectedCustomer = customerId
+    ? knownCustomers[customerId] ||
+      (customers?.data || []).find((c) => c.id === customerId)
+    : null;
+
+  /** Remember each pick so its label/price survives the next search. */
+  const pickCustomer = (id: string | null) => {
+    const c = id ? (customers?.data || []).find((x) => x.id === id) : null;
+    if (c) setKnownCustomers((cur) => ({ ...cur, [c.id]: c }));
+    setCustomerId(id);
+  };
 
   const unitOptions = (productId: string | null) => {
     const p = productId ? productsById[productId] : null;
@@ -176,12 +210,22 @@ export default function NewSaleScreen() {
         <VStack gap={16}>
           <Select
             label="Customer (optional — walk-in if blank)"
-            placeholder="Walk-in customer"
+            placeholder="Search name or mobile…"
             value={customerId}
             options={customerOptions}
-            onChange={setCustomerId}
+            selectedLabel={
+              selectedCustomer
+                ? selectedCustomer.mobile
+                  ? `${selectedCustomer.name} · ${selectedCustomer.mobile}`
+                  : selectedCustomer.name
+                : undefined
+            }
+            onSearch={setCustomerQuery}
+            loading={customersLoading}
+            onChange={pickCustomer}
             onCreate={async (label) => {
               const c = await createCustomer.mutateAsync({ name: label });
+              setKnownCustomers((cur) => ({ ...cur, [c.id]: c }));
               return { value: c.id, label: c.name };
             }}
             allowClear
@@ -243,11 +287,21 @@ export default function NewSaleScreen() {
                 </HStack>
                 <Select
                   label="Product"
-                  placeholder="Select product"
+                  placeholder="Search by name or SKU…"
                   value={line.productId}
                   options={productOptions}
+                  selectedLabel={
+                    line.productId && productsById[line.productId]
+                      ? `${productsById[line.productId].name} · ${money(productsById[line.productId].sellingPrice)}/${productsById[line.productId].baseUnit}`
+                      : undefined
+                  }
+                  onSearch={setProductQuery}
+                  loading={productsLoading}
                   onChange={(v) => {
                     const p = v ? productsById[v] : null;
+                    // Cache it — the maths below needs its price after the
+                    // search results move on.
+                    if (p) setKnownProducts((cur) => ({ ...cur, [p.id]: p }));
                     setLine(i, {
                       productId: v,
                       unit: p?.baseUnit || null,

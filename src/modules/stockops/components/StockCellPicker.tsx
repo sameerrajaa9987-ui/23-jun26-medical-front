@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useProducts } from "@modules/product/hooks/useProducts";
 import { useProductInventory } from "@modules/inventory/hooks/useInventory";
 import { VStack, Select, Text } from "@shared/ui";
@@ -34,13 +34,24 @@ export function StockCellPicker({
   onChange,
   locationLabel = "Location",
 }: Props) {
-  const { data: products } = useProducts();
+  // The catalogue is paged, so the picker searches server-side rather than
+  // listing whatever happened to be on page 1.
+  const [productQuery, setProductQuery] = useState("");
+  const { data: products, isFetching: productsLoading } = useProducts({
+    search: productQuery || undefined,
+    limit: 50,
+  });
   const { data: inv } = useProductInventory(value.productId || "");
 
   const productOptions = (products?.data || []).map((p) => ({
     value: p.id,
     label: `${p.name} · ${p.sku}`,
   }));
+  // The chosen product is resolved by its own inventory query, so it keeps its
+  // label even when the search results no longer contain it.
+  const selectedProductLabel = inv?.product
+    ? `${inv.product.name} · ${inv.product.sku}`
+    : undefined;
   const baseUnit = inv?.product.baseUnit || "";
   const batches = inv?.batches || [];
   const batchOptions = batches.map((b) => ({
@@ -87,9 +98,12 @@ export function StockCellPicker({
     <VStack gap={16}>
       <Select
         label="Product"
-        placeholder="Select product"
+        placeholder="Search by name or SKU…"
         value={value.productId}
         options={productOptions}
+        selectedLabel={selectedProductLabel}
+        onSearch={setProductQuery}
+        loading={productsLoading}
         onChange={(v) => onChange({ productId: v, ...EMPTY })}
       />
       <Select
