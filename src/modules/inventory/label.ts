@@ -1,5 +1,5 @@
-import * as Print from "expo-print";
 import bwipjs from "bwip-js";
+import { printHtml } from "@shared/print";
 
 /**
  * Shelf-label printing.
@@ -149,5 +149,5 @@ export async function printLabels(
   shopName: string,
 ): Promise<void> {
   const html = await buildLabelSheetHtml(specs, shopName);
-  await Print.printAsync({ html });
+  await printHtml(html);
 }

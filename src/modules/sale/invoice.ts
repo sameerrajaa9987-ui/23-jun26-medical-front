@@ -1,5 +1,5 @@
-import * as Print from "expo-print";
 import { Sale, InvoiceProfile } from "@modules/sale/types";
+import { printHtml } from "@shared/print";
 
 const money = (n: number) =>
   `₹${(Math.round(n * 100) / 100).toLocaleString("en-IN")}`;
@@ -92,5 +92,5 @@ export function invoiceHtml(sale: Sale, profile?: InvoiceProfile): string {
 }
 
 export async function printInvoice(sale: Sale, profile?: InvoiceProfile) {
-  await Print.printAsync({ html: invoiceHtml(sale, profile) });
+  await printHtml(invoiceHtml(sale, profile));
 }
