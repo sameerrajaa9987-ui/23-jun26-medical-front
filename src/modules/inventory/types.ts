@@ -69,6 +69,7 @@ export interface ReceiptLineInput {
   mfgDate?: string;
   expiryDate?: string;
   purchasePrice?: number;
+  mrp?: number;
   unit?: string;
   quantity: number;
   locationId: string;
@@ -107,6 +108,8 @@ export interface DraftLine {
   unit: string | null;
   quantity: string;
   purchasePrice: string;
+  /** Selling MRP for this lot — prints on the shelf label and prices the sale. */
+  mrp: string;
   locationId: string | null;
   /** Came from a scanned bill and needs a human look before saving. */
   flagged?: boolean;
@@ -143,9 +146,11 @@ export interface ReceiptDetail extends ReceiptListItem {
     productName: string;
     sku: string;
     batchNumber: string;
+    labelCode: string | null;
     mfgDate: string | null;
     expiryDate: string | null;
     purchasePrice: number;
+    mrp: number;
     unit: string;
     quantity: number;
     baseQuantity: number;
@@ -170,6 +175,47 @@ export interface SearchBatchResult {
 export interface SearchResult {
   products: StockSummaryItem[];
   batches: SearchBatchResult[];
+}
+
+/** Minimal product shape the scan resolver returns (a full product DTO). */
+export interface ScanProduct {
+  id: string;
+  name: string;
+  sku: string;
+  baseUnit: string;
+  sellingPrice: number;
+  mrp: number;
+  taxRatePct: number;
+  saltComposition?: string;
+  packs: { unit: string; factor: number }[];
+  prescriptionRequired?: boolean;
+  scheduleDrug?: string;
+}
+
+/** What a scanned shelf-label or product barcode resolves to at the till. */
+export interface ScanResult {
+  kind: "batch" | "product";
+  product: ScanProduct | null;
+  available: number;
+  /** Present when a shelf label (specific lot) was scanned. */
+  batch?: {
+    id: string;
+    batchNumber: string;
+    mfgDate: string | null;
+    expiryDate: string | null;
+    mrp: number;
+    purchasePrice: number;
+    labelCode: string;
+    expired: boolean;
+  };
+  /** Present when a product barcode was scanned — its lots, FEFO order. */
+  batches?: {
+    batchId: string;
+    batchNumber: string;
+    expiryDate: string | null;
+    mrp: number;
+    available: number;
+  }[];
 }
 
 export interface Paginated<T> {

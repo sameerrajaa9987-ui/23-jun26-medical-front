@@ -1,8 +1,16 @@
 import React, { useMemo, useState } from "react";
-import { View, Pressable, StyleSheet } from "react-native";
+import { View, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { Plus, X, History, ShoppingCart } from "lucide-react-native";
+import {
+  Plus,
+  X,
+  History,
+  ShoppingCart,
+  ScanLine,
+  AlertTriangle,
+} from "lucide-react-native";
 import { useProducts } from "@modules/product/hooks/useProducts";
+import { inventoryApi } from "@modules/inventory/api/inventoryApi";
 import {
   useCustomers,
   useCreateCustomer,
@@ -25,6 +33,10 @@ import {
 
 interface DraftLine {
   productId: string | null;
+  /** Set when the line came from a scanned label — pins the sale to this lot. */
+  batchId?: string | null;
+  batchNumber?: string | null;
+  expiry?: string | null;
   unit: string | null;
   quantity: string;
   unitPrice: string;
@@ -33,12 +45,23 @@ interface DraftLine {
 }
 const emptyLine = (): DraftLine => ({
   productId: null,
+  batchId: null,
+  batchNumber: null,
+  expiry: null,
   unit: null,
   quantity: "1",
   unitPrice: "",
   discount: "",
   taxRate: "",
 });
+
+/** "2028-01-31" / ISO -> "Jan 2028" for a quick human read on a line. */
+const prettyExp = (iso: string | null | undefined) => {
+  if (!iso) return "";
+  const [y, m] = String(iso).slice(0, 10).split("-");
+  const months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+  return `${months[Number(m) - 1] || m} ${y}`;
+};
 const money = (n: number) =>
   `₹${(Math.round(n * 100) / 100).toLocaleString("en-IN")}`;
 
@@ -63,6 +86,9 @@ export default function NewSaleScreen() {
   const [taxType, setTaxType] = useState<"intra" | "inter">("intra");
   const [paymentMode, setPaymentMode] = useState("cash");
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
+  const [scanValue, setScanValue] = useState("");
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanBusy, setScanBusy] = useState(false);
   type ProductRow = NonNullable<typeof products>["data"][number];
   type CustomerRow = NonNullable<typeof customers>["data"][number];
   const [knownProducts, setKnownProducts] = useState<
@@ -122,6 +148,94 @@ export default function NewSaleScreen() {
       cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)),
     );
   const addLine = () => setLines((cur) => [...cur, emptyLine()]);
+
+  /** Drop a resolved line into the first blank slot, else append. */
+  const placeLine = (line: DraftLine) =>
+    setLines((cur) => {
+      const blank = cur.findIndex((l) => !l.productId);
+      return blank >= 0
+        ? cur.map((l, k) => (k === blank ? line : l))
+        : [...cur, line];
+    });
+
+  /**
+   * A scanned barcode/QR from the counter's scanner (which types the code +
+   * Enter). A shelf label resolves to an exact lot and pins the sale to it; a
+   * product barcode adds a normal FEFO line. Scanning the same lot again just
+   * bumps its quantity — the supermarket-till behaviour.
+   */
+  const handleScan = async (raw: string) => {
+    const code = raw.trim();
+    if (!code || scanBusy) return;
+    setScanError(null);
+    setScanBusy(true);
+    try {
+      const res = await inventoryApi.scan(code);
+      const sp = res.product;
+      if (!sp) throw new Error("Nothing matched that code.");
+      // Cache it so the pricing maths can read this product after searches move on.
+      setKnownProducts((cur) => ({
+        ...cur,
+        [sp.id]: sp as unknown as ProductRow,
+      }));
+
+      if (res.kind === "batch" && res.batch) {
+        const b = res.batch;
+        if (b.expired) {
+          setScanError(
+            `${sp.name} · batch ${b.batchNumber} has EXPIRED — not added.`,
+          );
+          return;
+        }
+        if (res.available <= 0) {
+          setScanError(`${sp.name} · batch ${b.batchNumber} is out of stock.`);
+          return;
+        }
+        setLines((cur) => {
+          const idx = cur.findIndex((l) => l.batchId === b.id);
+          if (idx >= 0) {
+            return cur.map((l, k) =>
+              k === idx
+                ? { ...l, quantity: String((Number(l.quantity) || 0) + 1) }
+                : l,
+            );
+          }
+          const line: DraftLine = {
+            productId: sp.id,
+            batchId: b.id,
+            batchNumber: b.batchNumber,
+            expiry: b.expiryDate,
+            unit: sp.baseUnit,
+            quantity: "1",
+            unitPrice: String(b.mrp || sp.sellingPrice),
+            discount: "",
+            taxRate: String(sp.taxRatePct),
+          };
+          const blank = cur.findIndex((l) => !l.productId);
+          return blank >= 0
+            ? cur.map((l, k) => (k === blank ? line : l))
+            : [...cur, line];
+        });
+      } else {
+        // Product barcode: a normal line, FEFO decides the batch at checkout.
+        placeLine({
+          productId: sp.id,
+          batchId: null,
+          batchNumber: null,
+          expiry: null,
+          unit: sp.baseUnit,
+          quantity: "1",
+          unitPrice: String(sp.sellingPrice),
+          discount: "",
+          taxRate: String(sp.taxRatePct),
+        });
+      }
+    } catch (e) {
+      setScanError(apiErrorMessage(e));
+    } finally {
+      setScanBusy(false);
+    }
+  };
   const removeLine = (i: number) =>
     setLines((cur) =>
       cur.length === 1 ? cur : cur.filter((_, idx) => idx !== i),
@@ -163,6 +277,7 @@ export default function NewSaleScreen() {
     .filter((l) => l.productId && Number(l.quantity) > 0)
     .map((l) => ({
       productId: l.productId!,
+      batchId: l.batchId || undefined,
       unit: l.unit || undefined,
       quantity: Number(l.quantity),
       unitPrice: l.unitPrice === "" ? undefined : Number(l.unitPrice),
@@ -265,6 +380,47 @@ export default function NewSaleScreen() {
         </VStack>
       </Card>
 
+      {/* Scan to sell. A counter scanner types the code + Enter, so this box
+          stays focused and clears itself after each scan — scan, scan, scan.
+          Also accepts a typed code for shops without a scanner yet. */}
+      <Card style={{ marginBottom: 16 }}>
+        <VStack gap={8}>
+          <TextField
+            label="Scan barcode / QR"
+            placeholder="Scan a shelf label — or type a code and press Enter"
+            value={scanValue}
+            onChangeText={setScanValue}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={() => {
+              handleScan(scanValue);
+              setScanValue("");
+            }}
+            leading={
+              scanBusy ? (
+                <ActivityIndicator color={palette.teal[600]} />
+              ) : (
+                <ScanLine size={18} color={palette.teal[600]} strokeWidth={2} />
+              )
+            }
+          />
+          {scanError && (
+            <HStack gap={6} align="center">
+              <AlertTriangle
+                size={14}
+                color={palette.warning.text}
+                strokeWidth={2.2}
+              />
+              <Text variant="caption" tone="warning">
+                {scanError}
+              </Text>
+            </HStack>
+          )}
+        </VStack>
+      </Card>
+
       <VStack gap={14}>
         {lines.map((line, i) => {
           const c = calc(line);
@@ -272,9 +428,31 @@ export default function NewSaleScreen() {
             <Card key={i} elevation="base">
               <VStack gap={14}>
                 <HStack align="center" justify="space-between">
-                  <Text variant="label-lg" tone="primary">
-                    Item {i + 1}
-                  </Text>
+                  <HStack gap={8} align="center" flex={1}>
+                    <Text variant="label-lg" tone="primary">
+                      Item {i + 1}
+                    </Text>
+                    {/* A scanned line is pinned to one lot; a badge makes that
+                        obvious next to the FEFO-picked (typed) lines. */}
+                    {line.batchId && (
+                      <View style={styles.lotBadge}>
+                        <ScanLine
+                          size={11}
+                          color={palette.teal[700]}
+                          strokeWidth={2.2}
+                        />
+                        <Text
+                          variant="label-sm"
+                          style={{ color: palette.teal[700] }}
+                        >
+                          Batch {line.batchNumber}
+                          {line.expiry
+                            ? ` · exp ${prettyExp(line.expiry)}`
+                            : ""}
+                        </Text>
+                      </View>
+                    )}
+                  </HStack>
                   {lines.length > 1 && (
                     <Pressable
                       onPress={() => removeLine(i)}
@@ -460,6 +638,15 @@ const styles = StyleSheet.create({
     backgroundColor: palette.danger.bg,
     alignItems: "center",
     justifyContent: "center",
+  },
+  lotBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    backgroundColor: palette.teal[50],
   },
   addRow: {
     flexDirection: "row",

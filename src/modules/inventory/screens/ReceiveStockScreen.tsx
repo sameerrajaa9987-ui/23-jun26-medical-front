@@ -7,6 +7,7 @@ import {
   PackageCheck,
   ScanLine,
   AlertTriangle,
+  Printer,
 } from "lucide-react-native";
 import {
   useProducts,
@@ -26,7 +27,13 @@ import {
   toCreatePayload,
   toProductLite,
 } from "@modules/inventory/productFromBill";
-import { DraftLine, ProductLite, ScannedBill } from "@modules/inventory/types";
+import {
+  DraftLine,
+  ProductLite,
+  ReceiptDetail,
+  ScannedBill,
+} from "@modules/inventory/types";
+import { printLabels, LabelSpec } from "@modules/inventory/label";
 import {
   emptyLine,
   linesFromScan,
@@ -75,6 +82,7 @@ export default function ReceiveStockScreen() {
   const canManageProducts = useAuthStore((s) => s.hasPermission)(
     "products.manage",
   );
+  const shopName = useAuthStore((s) => s.organization?.name) || "Pharmacy";
   const { data: suppliers } = useSuppliers();
   const createSupplier = useCreateSupplier();
   const createProduct = useCreateProduct();
@@ -83,7 +91,9 @@ export default function ReceiveStockScreen() {
   const [supplierId, setSupplierId] = useState<string | null>(null);
   const [referenceNo, setReference] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
-  const [done, setDone] = useState<string | null>(null);
+  // The whole receipt, not just its number — its lines carry the label codes
+  // the "Print labels" step needs.
+  const [done, setDone] = useState<ReceiptDetail | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
   const [dupWarning, setDupWarning] = useState<string | null>(null);
   const [knownProducts, setKnownProducts] = useState<
@@ -217,6 +227,25 @@ export default function ReceiveStockScreen() {
   const validLines = toReceiptLines(lines);
   const totalBase = totalBaseUnits(lines, productsById);
 
+  /**
+   * Print a shelf label for every unit just received. One label per unit is the
+   * usual want — you sticker each strip/bottle as you shelve it — so copies
+   * default to the received quantity; the label module caps a runaway total.
+   */
+  const printReceiptLabels = (receipt: ReceiptDetail) => {
+    const specs: LabelSpec[] = receipt.lines
+      .filter((l) => l.labelCode)
+      .map((l) => ({
+        labelCode: l.labelCode!,
+        productName: l.productName,
+        batchNumber: l.batchNumber,
+        expiry: l.expiryDate,
+        mrp: l.mrp,
+        copies: Math.max(1, Math.round(l.quantity)),
+      }));
+    if (specs.length) void printLabels(specs, shopName);
+  };
+
   const submit = () => {
     if (!validLines.length) return;
     mut.mutate(
@@ -227,7 +256,7 @@ export default function ReceiveStockScreen() {
       },
       {
         onSuccess: (r) => {
-          setDone(r.receiptNo);
+          setDone(r);
           setLines([emptyLine()]);
           setExpanded(new Set([0]));
           setSupplierId(null);
@@ -296,15 +325,32 @@ export default function ReceiveStockScreen() {
       )}
       {done && (
         <View style={okBox}>
-          <HStack gap={8} align="center">
-            <PackageCheck
-              size={18}
-              color={palette.success.text}
-              strokeWidth={2}
-            />
-            <Text variant="body-sm" tone="success">
-              Stock received — {done} posted to inventory.
-            </Text>
+          <HStack gap={10} align="center" justify="space-between" wrap>
+            <HStack gap={8} align="center" flex={1}>
+              <PackageCheck
+                size={18}
+                color={palette.success.text}
+                strokeWidth={2}
+              />
+              <Text variant="body-sm" tone="success">
+                Stock received — {done.receiptNo} posted to inventory.
+              </Text>
+            </HStack>
+            {done.lines.some((l) => l.labelCode) && (
+              <Button
+                label="Print labels"
+                variant="secondary"
+                fullWidth={false}
+                onPress={() => printReceiptLabels(done)}
+                icon={
+                  <Printer
+                    size={15}
+                    color={palette.text.primary}
+                    strokeWidth={2}
+                  />
+                }
+              />
+            )}
           </HStack>
         </View>
       )}

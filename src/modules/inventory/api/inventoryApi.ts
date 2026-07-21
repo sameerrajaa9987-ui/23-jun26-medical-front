@@ -7,6 +7,7 @@ import {
   ReceiptDetail,
   ReceiptListItem,
   SearchResult,
+  ScanResult,
   Paginated,
 } from "@modules/inventory/types";
 
@@ -45,6 +46,14 @@ export const inventoryApi = {
     );
     return res.data.data;
   },
+  /** Resolve a scanned shelf-label or product barcode to a sellable lot. */
+  scan: async (code: string): Promise<ScanResult> => {
+    const res = await apiClient.get<{ success: boolean; data: ScanResult }>(
+      `/inventory/scan/${encodeURIComponent(code)}`,
+    );
+    return res.data.data;
+  },
+
   receive: async (payload: ReceivePayload) => {
     const res = await apiClient.post<{ success: boolean; data: ReceiptDetail }>(
       "/inventory/receipts",

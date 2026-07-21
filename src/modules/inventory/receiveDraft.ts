@@ -24,6 +24,7 @@ export const emptyLine = (): DraftLine => ({
   unit: null,
   quantity: "",
   purchasePrice: "",
+  mrp: "",
   locationId: null,
 });
 
@@ -131,6 +132,10 @@ export function linesFromScan(bill: ScannedBill): DraftLine[] {
     // Cost only means anything once the pack is known AND the rate was agreed.
     const cost = unit && rateOk ? l.costPerBaseUnit : null;
 
+    // MRP comes straight off the bill when the read was confident — it prints on
+    // the label, so a wrong one is worse than a blank the pharmacist fills in.
+    const mrpOk = l.fields.mrp.confidence === "high";
+
     return {
       productId: l.match?.id || null,
       batchNumber: batch ? String(batch) : "",
@@ -139,6 +144,7 @@ export function linesFromScan(bill: ScannedBill): DraftLine[] {
       unit,
       quantity: qty != null ? String(qty) : "",
       purchasePrice: cost != null ? String(cost) : "",
+      mrp: mrpOk && l.mrp != null ? String(l.mrp) : "",
       locationId: null,
       flagged: l.needsReview || !l.match,
       // Kept regardless of whether we matched: it names the row for a human,
@@ -205,6 +211,7 @@ export function toReceiptLines(lines: DraftLine[]): ReceiptLineInput[] {
       expiryDate: l.expiryDate.trim() || undefined,
       purchasePrice:
         l.purchasePrice === "" ? undefined : Number(l.purchasePrice),
+      mrp: l.mrp === "" ? undefined : Number(l.mrp),
       unit: l.unit || undefined,
       quantity: Number(l.quantity),
       locationId: l.locationId!,

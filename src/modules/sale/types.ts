@@ -99,6 +99,8 @@ export interface SaleListItem {
 
 export interface SaleLineInput {
   productId: string;
+  /** Set when the line came from a scanned label — sell that exact lot. */
+  batchId?: string;
   unit?: string;
   quantity: number;
   unitPrice?: number;

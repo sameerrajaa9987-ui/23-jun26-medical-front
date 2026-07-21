@@ -150,37 +150,53 @@ export function ReceiveLineRow({
             </View>
           </HStack>
 
-          {/* Dates + cost. Three across on desktop, two rows on a phone. */}
+          {/* Dates + money. On desktop the two dates share a row and the two
+              prices share the next; a phone stacks each pair. MRP sits beside
+              cost because they're the two money fields — and MRP prints on the
+              shelf label, so it earns a spot on the form. */}
           {wide ? (
-            <HStack gap={10}>
-              <View style={{ flex: 1 }}>
-                <TextField
-                  label="Expiry date"
-                  value={line.expiryDate}
-                  onChangeText={(v) => onChange({ expiryDate: v })}
-                  placeholder="YYYY-MM-DD"
-                  autoCapitalize="none"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <TextField
-                  label="Mfg date"
-                  value={line.mfgDate}
-                  onChangeText={(v) => onChange({ mfgDate: v })}
-                  placeholder="optional"
-                  autoCapitalize="none"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <TextField
-                  label="Cost / base (₹)"
-                  value={line.purchasePrice}
-                  onChangeText={(v) => onChange({ purchasePrice: v })}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                />
-              </View>
-            </HStack>
+            <>
+              <HStack gap={10}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label="Expiry date"
+                    value={line.expiryDate}
+                    onChangeText={(v) => onChange({ expiryDate: v })}
+                    placeholder="YYYY-MM-DD"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label="Mfg date"
+                    value={line.mfgDate}
+                    onChangeText={(v) => onChange({ mfgDate: v })}
+                    placeholder="optional"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </HStack>
+              <HStack gap={10}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label="Cost / base (₹)"
+                    value={line.purchasePrice}
+                    onChangeText={(v) => onChange({ purchasePrice: v })}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label="MRP (₹)"
+                    value={line.mrp}
+                    onChangeText={(v) => onChange({ mrp: v })}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                  />
+                </View>
+              </HStack>
+            </>
           ) : (
             <>
               <HStack gap={10}>
@@ -195,6 +211,17 @@ export function ReceiveLineRow({
                 </View>
                 <View style={{ flex: 1 }}>
                   <TextField
+                    label="Mfg date"
+                    value={line.mfgDate}
+                    onChangeText={(v) => onChange({ mfgDate: v })}
+                    placeholder="optional"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </HStack>
+              <HStack gap={10}>
+                <View style={{ flex: 1 }}>
+                  <TextField
                     label="Cost / base (₹)"
                     value={line.purchasePrice}
                     onChangeText={(v) => onChange({ purchasePrice: v })}
@@ -202,14 +229,16 @@ export function ReceiveLineRow({
                     placeholder="0.00"
                   />
                 </View>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label="MRP (₹)"
+                    value={line.mrp}
+                    onChangeText={(v) => onChange({ mrp: v })}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                  />
+                </View>
               </HStack>
-              <TextField
-                label="Mfg date (optional)"
-                value={line.mfgDate}
-                onChangeText={(v) => onChange({ mfgDate: v })}
-                placeholder="YYYY-MM-DD"
-                autoCapitalize="none"
-              />
             </>
           )}
 
