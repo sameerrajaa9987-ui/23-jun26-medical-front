@@ -78,7 +78,9 @@ function labelHtml(
         <div class="qr">${svgs.qr}</div>
         <div class="info">
           <div class="name">${esc(spec.productName)}</div>
-          <div class="be">${spec.batchNumber ? `B: ${esc(spec.batchNumber)}` : ""}${
+          <!-- "BATCH", not "B:" — a "B:" prefix reads like the B00000000 scan
+               code under the barcode, and people typed the wrong one. -->
+          <div class="be">${spec.batchNumber ? `BATCH ${esc(spec.batchNumber)}` : ""}${
             exp ? `<span class="exp">EXP ${exp}</span>` : ""
           }</div>
           <div class="mrp">MRP ${money(spec.mrp)}</div>

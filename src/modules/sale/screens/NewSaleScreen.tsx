@@ -387,7 +387,7 @@ export default function NewSaleScreen() {
         <VStack gap={8}>
           <TextField
             label="Scan barcode / QR"
-            placeholder="Scan a shelf label — or type a code and press Enter"
+            placeholder="Scan a label — or type its code / batch no. and press Enter"
             value={scanValue}
             onChangeText={setScanValue}
             autoCapitalize="characters"
