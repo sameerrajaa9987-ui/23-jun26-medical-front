@@ -38,6 +38,12 @@ interface DraftLine {
   batchId?: string | null;
   batchNumber?: string | null;
   expiry?: string | null;
+  /**
+   * Sellable BASE units behind this line — the scanned lot's stock, or the
+   * product's total when FEFO will choose. Lets the form say "only 3 left"
+   * while the cashier types, instead of failing at checkout.
+   */
+  available?: number | null;
   unit: string | null;
   quantity: string;
   unitPrice: string;
@@ -49,6 +55,7 @@ const emptyLine = (): DraftLine => ({
   batchId: null,
   batchNumber: null,
   expiry: null,
+  available: null,
   unit: null,
   quantity: "1",
   unitPrice: "",
@@ -150,6 +157,27 @@ export default function NewSaleScreen() {
     );
   const addLine = () => setLines((cur) => [...cur, emptyLine()]);
 
+  /**
+   * How many units of a hand-picked product can actually be sold. Scanned lines
+   * already know (the scan says so); a dropdown pick has to ask.
+   */
+  const loadAvailability = async (index: number, productId: string) => {
+    try {
+      const inv = await inventoryApi.productInventory(productId);
+      setLines((cur) =>
+        cur.map((l, k) =>
+          // Only if this line still holds the product we asked about — a slow
+          // reply must never overwrite a line the cashier has moved on from.
+          k === index && l.productId === productId
+            ? { ...l, available: inv.summary.available }
+            : l,
+        ),
+      );
+    } catch {
+      // Non-fatal: checkout still refuses to oversell, server-side.
+    }
+  };
+
   /** Drop a resolved line into the first blank slot, else append. */
   const placeLine = (line: DraftLine) =>
     setLines((cur) => {
@@ -206,6 +234,7 @@ export default function NewSaleScreen() {
             batchId: b.id,
             batchNumber: b.batchNumber,
             expiry: b.expiryDate,
+            available: res.available,
             unit: sp.baseUnit,
             quantity: "1",
             unitPrice: String(b.mrp || sp.sellingPrice),
@@ -224,6 +253,7 @@ export default function NewSaleScreen() {
           batchId: null,
           batchNumber: null,
           expiry: null,
+          available: res.available,
           unit: sp.baseUnit,
           quantity: "1",
           unitPrice: String(sp.sellingPrice),
@@ -264,6 +294,37 @@ export default function NewSaleScreen() {
     const tax = (taxable * rate) / 100;
     return { gross, discount, taxable, tax, total: taxable + tax };
   };
+
+  /**
+   * Is this line asking for more than exists?
+   *
+   * Compared in BASE units on purpose: quantity is entered in the line's unit,
+   * so "2 strips" of a 15-tablet strip needs 30, not 2. Returns null when the
+   * stock isn't known yet — we warn about facts, never guesses.
+   */
+  const stockIssue = (l: DraftLine) => {
+    if (l.available == null || !l.productId) return null;
+    const p = productsById[l.productId];
+    const factor =
+      !l.unit || !p || l.unit === p.baseUnit
+        ? 1
+        : (p.packs || []).find((x) => x.unit === l.unit)?.factor || 1;
+    const needBase = (Number(l.quantity) || 0) * factor;
+    if (needBase <= l.available) return null;
+    const baseUnit = p?.baseUnit || "units";
+    return {
+      needBase,
+      available: l.available,
+      message:
+        l.available <= 0
+          ? `Out of stock${l.batchNumber ? ` in batch ${l.batchNumber}` : ""}`
+          : `Only ${l.available} ${baseUnit} available${l.batchNumber ? ` in batch ${l.batchNumber}` : ""}`,
+    };
+  };
+
+  const shortLines = lines
+    .map((l, i) => ({ i, issue: stockIssue(l) }))
+    .filter((x) => x.issue);
 
   const totals = lines.reduce(
     (acc, l) => {
@@ -499,10 +560,16 @@ export default function NewSaleScreen() {
                     if (p) setKnownProducts((cur) => ({ ...cur, [p.id]: p }));
                     setLine(i, {
                       productId: v,
+                      // Picking by hand clears any scanned lot: FEFO chooses now.
+                      batchId: null,
+                      batchNumber: null,
+                      expiry: null,
+                      available: null,
                       unit: p?.baseUnit || null,
                       unitPrice: p ? String(p.sellingPrice) : "",
                       taxRate: p ? String(p.taxRatePct) : "",
                     });
+                    if (v) void loadAvailability(i, v);
                   }}
                 />
                 <HStack gap={12}>
@@ -512,6 +579,13 @@ export default function NewSaleScreen() {
                       value={line.quantity}
                       onChangeText={(v) => setLine(i, { quantity: v })}
                       keyboardType="decimal-pad"
+                      // Say it here, as they type — not after a failed checkout.
+                      error={stockIssue(line)?.message}
+                      hint={
+                        line.available != null && !stockIssue(line)
+                          ? `${line.available} available`
+                          : undefined
+                      }
                     />
                   </View>
                   <View style={{ flex: 1.3 }}>
@@ -610,11 +684,37 @@ export default function NewSaleScreen() {
         </VStack>
       </Card>
 
+      {/* Name the blocked lines before the button is pressed, so it's obvious
+          WHY checkout is disabled rather than the button just looking dead. */}
+      {shortLines.length > 0 && (
+        <View style={warnBox}>
+          <HStack gap={8} align="flex-start">
+            <AlertTriangle
+              size={16}
+              color={palette.warning.text}
+              strokeWidth={2.2}
+            />
+            <VStack gap={2} flex={1}>
+              <Text variant="label" tone="warning">
+                Not enough stock to complete this sale
+              </Text>
+              {shortLines.map(({ i, issue }) => (
+                <Text key={i} variant="caption" tone="warning">
+                  Item {i + 1}: asked for {issue!.needBase},{" "}
+                  {issue!.message.charAt(0).toLowerCase() +
+                    issue!.message.slice(1)}
+                </Text>
+              ))}
+            </VStack>
+          </HStack>
+        </View>
+      )}
+
       <Button
         label="Complete sale & invoice"
         size="lg"
         loading={mut.isPending}
-        disabled={!validLines.length}
+        disabled={!validLines.length || shortLines.length > 0}
         onPress={submit}
         icon={<ShoppingCart size={18} color="#FFFFFF" strokeWidth={2} />}
       />
@@ -677,4 +777,12 @@ const errorBox = {
   borderWidth: 1,
   borderColor: palette.danger.border,
   marginBottom: 16,
+} as const;
+const warnBox = {
+  padding: 14,
+  borderRadius: radius.md,
+  backgroundColor: palette.warning.bg,
+  borderWidth: 1,
+  borderColor: palette.warning.border,
+  marginBottom: 12,
 } as const;
