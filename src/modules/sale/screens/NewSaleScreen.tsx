@@ -11,6 +11,7 @@ import {
 } from "lucide-react-native";
 import { useProducts } from "@modules/product/hooks/useProducts";
 import { inventoryApi } from "@modules/inventory/api/inventoryApi";
+import { useScanGun } from "@shared/useScanGun";
 import {
   useCustomers,
   useCreateCustomer,
@@ -236,6 +237,10 @@ export default function NewSaleScreen() {
       setScanBusy(false);
     }
   };
+
+  // A USB scanner types wherever focus happens to be, so listen page-wide.
+  // Without this, a scan lands nowhere unless the cashier clicked the box first.
+  useScanGun((code) => void handleScan(code), { ignoreSelector: "#scanbox" });
   const removeLine = (i: number) =>
     setLines((cur) =>
       cur.length === 1 ? cur : cur.filter((_, idx) => idx !== i),
@@ -385,27 +390,35 @@ export default function NewSaleScreen() {
           Also accepts a typed code for shops without a scanner yet. */}
       <Card style={{ marginBottom: 16 }}>
         <VStack gap={8}>
-          <TextField
-            label="Scan barcode / QR"
-            placeholder="Scan a label — or type its code / batch no. and press Enter"
-            value={scanValue}
-            onChangeText={setScanValue}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            autoFocus
-            returnKeyType="done"
-            onSubmitEditing={() => {
-              handleScan(scanValue);
-              setScanValue("");
-            }}
-            leading={
-              scanBusy ? (
-                <ActivityIndicator color={palette.teal[600]} />
-              ) : (
-                <ScanLine size={18} color={palette.teal[600]} strokeWidth={2} />
-              )
-            }
-          />
+          {/* nativeID -> id="scanbox" on web, so the page-wide scanner listener
+              skips keys typed here (this field handles its own Enter). */}
+          <View nativeID="scanbox">
+            <TextField
+              label="Scan barcode / QR"
+              placeholder="Scan a label — or type its code / batch no. and press Enter"
+              value={scanValue}
+              onChangeText={setScanValue}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                handleScan(scanValue);
+                setScanValue("");
+              }}
+              leading={
+                scanBusy ? (
+                  <ActivityIndicator color={palette.teal[600]} />
+                ) : (
+                  <ScanLine
+                    size={18}
+                    color={palette.teal[600]}
+                    strokeWidth={2}
+                  />
+                )
+              }
+            />
+          </View>
           {scanError && (
             <HStack gap={6} align="center">
               <AlertTriangle

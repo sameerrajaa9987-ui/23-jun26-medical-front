@@ -62,7 +62,16 @@ async function codeSvgs(
     }),
     bwipjs.toSVG({ bcid: "qrcode", text: code, scale: 2 }),
   ]);
-  return { barcode, qr };
+  // preserveAspectRatio="none" lets the barcode fill the label's full width.
+  // Left at the default it is letterboxed to fit the 5mm height, which shrinks
+  // the bars to roughly half the width they should be — and a laser scanner
+  // simply won't read bars that narrow. Stretching only the HEIGHT is safe:
+  // every bar scales by the same horizontal factor, so their ratios (the thing
+  // the scanner actually decodes) are untouched.
+  return {
+    barcode: barcode.replace("<svg ", '<svg preserveAspectRatio="none" '),
+    qr,
+  };
 }
 
 function labelHtml(
@@ -139,7 +148,12 @@ export async function buildLabelSheetHtml(
     .be { font-size: 5.5pt; margin-top: .3mm; white-space: nowrap; overflow: hidden; }
     .be .exp { margin-left: 1.5mm; }
     .mrp { font-size: 8pt; font-weight: 700; margin-top: .3mm; }
-    .barcode svg { width: 100%; height: 5mm; display: block; }
+    /* 2mm of white each side is the QUIET ZONE. Code128 is unreadable without
+       one — the scanner needs blank space to find where the symbol starts and
+       ends. This was missing, and is a classic cause of "the scanner won't
+       read it". */
+    .barcode { padding: 0 2mm; }
+    .barcode svg { width: 100%; height: 6mm; display: block; }
     .code { font-size: 5pt; text-align: center; letter-spacing: 1px; line-height: 1; }
   </style></head>
   <body><div class="sheet">${cells.join("")}</div></body></html>`;
